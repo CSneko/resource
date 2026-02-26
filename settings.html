@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>站点设置</title>
+
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background-size: cover;
+    background-position: center;
+}
+
+body {
+    background: url('https://www.loliapi.com/acg') fixed;
+    font-family: Arial, sans-serif;
+}
+
+.container {
+    max-width: 800px;
+    margin: 20px auto;
+    background: rgba(255,255,255,0.9);
+    border-radius: 15px;
+    padding: 30px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.2);
+}
+
+h1 {
+    margin: 0;
+}
+
+.section {
+    margin-top: 20px;
+}
+
+label {
+    display: block;
+    margin: 12px 0 5px;
+}
+
+input[type="text"] {
+    width: 100%;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+}
+
+input[type="range"] {
+    width: 100%;
+}
+
+input[type="color"] {
+    width: 60px;
+    height: 35px;
+    border: none;
+    cursor: pointer;
+}
+
+.value-label {
+    font-size: 0.9em;
+    color: #666;
+}
+
+button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    background: #2c82c9;
+    color: white;
+    font-size: 15px;
+}
+
+button:hover {
+    opacity: 0.85;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div style="display:flex;justify-content:space-between;align-items:center;">
+<h1>⚙ 站点设置</h1>
+<a href="/">⬅ 返回首页</a>
+</div>
+
+<div class="section">
+
+<label>背景图地址</label>
+<input type="text" id="bgUrl">
+
+<label>字体颜色</label>
+<input type="color" id="fontColor">
+
+<label>字体大小 <span class="value-label" id="fontSizeVal"></span></label>
+<input type="range" id="fontSize" min="12" max="32">
+
+<label>链接颜色</label>
+<input type="color" id="linkColor">
+
+<label>文件夹宽度 <span class="value-label" id="folderWidthVal"></span></label>
+<input type="range" id="folderWidth" min="400" max="1400">
+
+<label>文件夹高度 <span class="value-label" id="folderHeightVal"></span></label>
+<input type="range" id="folderHeight" min="40" max="200">
+
+<label>文件夹颜色</label>
+<input type="color" id="folderColor">
+
+<label>背景颜色</label>
+<input type="color" id="bgColor">
+
+<label>背景透明度 <span class="value-label" id="bgOpacityVal"></span></label>
+<input type="range" id="bgOpacity" min="0" max="1" step="0.05">
+
+<button onclick="save()">保存设置</button>
+<button onclick="resetSettings()" style="background:#999;">恢复默认</button>
+
+</div>
+</div>
+
+
+<script>
+const ids = [
+"bgUrl","fontColor","fontSize","linkColor",
+"folderWidth","folderHeight","folderColor",
+"bgColor","bgOpacity"
+];
+
+function updateLabels(){
+    fontSizeVal.innerText = fontSize.value + "px";
+    folderWidthVal.innerText = folderWidth.value + "px";
+    folderHeightVal.innerText = folderHeight.value + "px";
+    bgOpacityVal.innerText = bgOpacity.value;
+}
+
+function load(){
+    const saved = JSON.parse(localStorage.getItem("siteSettings") || "{}");
+
+    ids.forEach(id=>{
+        if(saved[id] !== undefined){
+            document.getElementById(id).value = saved[id];
+        }
+    });
+
+    updateLabels();
+}
+
+function save(){
+    const data = {};
+    ids.forEach(id=>{
+        data[id] = document.getElementById(id).value;
+    });
+
+    localStorage.setItem("siteSettings", JSON.stringify(data));
+    alert("设置已保存");
+}
+
+function resetSettings(){
+    localStorage.removeItem("siteSettings");
+    alert("已恢复默认");
+    location.reload();
+}
+
+document.querySelectorAll("input[type=range]").forEach(r=>{
+    r.addEventListener("input", updateLabels);
+});
+
+load();
+</script>
+
+</body>
+</html>
