@@ -79,7 +79,7 @@ template = """
             {content}
             <hr>
             <div style="text-align: center;">
-                <img src="https://moe-counter.glitch.me/get/@CrystalNeko" alt="访问计数">
+                <img src="https://count.getloli.com/@:CrystalNeko" alt="访问计数" />
             </div>
         </div>
     </body>
