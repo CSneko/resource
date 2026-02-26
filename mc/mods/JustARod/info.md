@@ -12,4 +12,4 @@ Minecraft版本: 1.21.1
 ## 相关链接
 Github: [https://github.com/CSneko/justarod](https://github.com/CSneko/justarod)
 
-爱发电：[https://afdian.com/a/cccry](https://github.com/CSneko/justarod)
+爱发电：[https://afdian.com/a/cccry](https://afdian.com/a/cccry)
