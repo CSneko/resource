@@ -27,13 +27,9 @@ body {
     box-shadow: 0 0 20px rgba(0,0,0,0.2);
 }
 
-h1 {
-    margin: 0;
-}
+h1 { margin: 0; }
 
-.section {
-    margin-top: 20px;
-}
+.section { margin-top: 20px; }
 
 label {
     display: block;
@@ -47,9 +43,7 @@ input[type="text"] {
     border: 1px solid #ccc;
 }
 
-input[type="range"] {
-    width: 100%;
-}
+input[type="range"] { width: 100%; }
 
 input[type="color"] {
     width: 60px;
@@ -64,18 +58,21 @@ input[type="color"] {
 }
 
 button {
-    margin-top: 20px;
-    padding: 10px 20px;
+    margin-top: 10px;
+    margin-right: 8px;
+    padding: 8px 16px;
     border: none;
     border-radius: 8px;
     cursor: pointer;
     background: #2c82c9;
     color: white;
-    font-size: 15px;
+    font-size: 14px;
 }
 
-button:hover {
-    opacity: 0.85;
+button:hover { opacity: 0.85; }
+
+.theme-btn {
+    background: #666;
 }
 </style>
 </head>
@@ -118,8 +115,21 @@ button:hover {
 <label>背景透明度 <span class="value-label" id="bgOpacityVal"></span></label>
 <input type="range" id="bgOpacity" min="0" max="1" step="0.05">
 
-<button onclick="save()">保存设置</button>
+<hr>
+
+<h3>快速主题</h3>
+<button class="theme-btn" onclick="applyTheme('light')">清新</button>
+<button class="theme-btn" onclick="applyTheme('dark')">深色</button>
+<button class="theme-btn" onclick="applyTheme('pink')">粉色</button>
+<button class="theme-btn" onclick="toggleNight()">🌙 夜间模式</button>
+
+<hr>
+
+<button onclick="save()">保存</button>
 <button onclick="resetSettings()" style="background:#999;">恢复默认</button>
+<button onclick="exportConfig()" style="background:#4caf50;">导出配置</button>
+<input type="file" id="importFile" style="display:none" onchange="importConfig(event)">
+<button onclick="document.getElementById('importFile').click()" style="background:#ff9800;">导入配置</button>
 
 </div>
 </div>
@@ -139,6 +149,36 @@ function updateLabels(){
     bgOpacityVal.innerText = bgOpacity.value;
 }
 
+function getData(){
+    const data = {};
+    ids.forEach(id=>{
+        data[id] = document.getElementById(id).value;
+    });
+    return data;
+}
+
+function applyPreview(){
+    const s = getData();
+
+    if(s.bgUrl){
+        document.body.style.background = `url('${s.bgUrl}') fixed`;
+        document.body.style.backgroundSize = "cover";
+    }
+
+    document.body.style.color = s.fontColor;
+    document.body.style.fontSize = s.fontSize + "px";
+    document.body.style.backgroundColor = s.bgColor;
+
+    document.querySelector(".container").style.maxWidth = s.folderWidth + "px";
+    document.querySelector(".container").style.background =
+        `rgba(255,255,255,${s.bgOpacity})`;
+}
+
+function save(){
+    localStorage.setItem("siteSettings", JSON.stringify(getData()));
+    alert("已保存");
+}
+
 function load(){
     const saved = JSON.parse(localStorage.getItem("siteSettings") || "{}");
 
@@ -149,26 +189,69 @@ function load(){
     });
 
     updateLabels();
-}
-
-function save(){
-    const data = {};
-    ids.forEach(id=>{
-        data[id] = document.getElementById(id).value;
-    });
-
-    localStorage.setItem("siteSettings", JSON.stringify(data));
-    alert("设置已保存");
+    applyPreview();
 }
 
 function resetSettings(){
     localStorage.removeItem("siteSettings");
-    alert("已恢复默认");
     location.reload();
 }
 
-document.querySelectorAll("input[type=range]").forEach(r=>{
-    r.addEventListener("input", updateLabels);
+function applyTheme(name){
+    if(name==="light"){
+        fontColor.value="#333333";
+        folderColor.value="#f5f5f5";
+        bgColor.value="#ffffff";
+    }
+    if(name==="dark"){
+        fontColor.value="#eeeeee";
+        folderColor.value="#333333";
+        bgColor.value="#111111";
+    }
+    if(name==="pink"){
+        fontColor.value="#ff4da6";
+        folderColor.value="#ffe6f2";
+        bgColor.value="#fff0f5";
+    }
+    applyPreview();
+}
+
+function toggleNight(){
+    fontColor.value="#eeeeee";
+    bgColor.value="#000000";
+    folderColor.value="#222222";
+    applyPreview();
+}
+
+function exportConfig(){
+    const blob = new Blob([JSON.stringify(getData(),null,2)],{type:"application/json"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="site-config.json";
+    a.click();
+}
+
+function importConfig(e){
+    const file=e.target.files[0];
+    const reader=new FileReader();
+    reader.onload=function(){
+        const data=JSON.parse(reader.result);
+        ids.forEach(id=>{
+            if(data[id]!==undefined){
+                document.getElementById(id).value=data[id];
+            }
+        });
+        updateLabels();
+        applyPreview();
+    };
+    reader.readAsText(file);
+}
+
+document.querySelectorAll("input").forEach(el=>{
+    el.addEventListener("input", ()=>{
+        updateLabels();
+        applyPreview();
+    });
 });
 
 load();
