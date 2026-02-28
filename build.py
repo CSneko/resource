@@ -154,7 +154,7 @@ a:hover {{
 
 }})();
 </script>
-<!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "eab93a94af294e41b8f2d7e7c2d83b8a"}'></script><!-- End Cloudflare Web Analytics -->
+<!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{{"token": "eab93a94af294e41b8f2d7e7c2d83b8a"}}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>
 """
