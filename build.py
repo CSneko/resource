@@ -3,8 +3,8 @@ import json
 import hashlib
 import markdown
 import shutil
-import re  # 新增用于分片文件名匹配
-
+import re
+from PIL import Image  # 新增：用于生成缩略图
 
 # =========================
 # HTML 模板
@@ -79,7 +79,62 @@ a:hover {{
     text-decoration: underline;
 }}
 
-/* 下载模态框 */
+/* 视图控制条 */
+.view-controls {{
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}}
+.view-controls select, .view-controls button {{
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    background: white;
+    cursor: pointer;
+}}
+.view-controls button.active {{
+    background: #2c82c9;
+    color: white;
+    border-color: #2c82c9;
+}}
+
+/* 图标视图 */
+.icon-view {{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 15px;
+}}
+.icon-view .entry {{
+    flex-direction: column;
+    text-align: center;
+    padding: 15px 8px;
+    transform: none !important;
+}}
+.icon-view .entry:hover {{
+    transform: scale(1.03) !important;
+}}
+.icon-view .entry-icon {{
+    font-size: 3em;
+    margin-bottom: 8px;
+    width: 100%;
+    overflow: hidden;
+}}
+.icon-view .entry-icon img {{
+    max-width: 100%;
+    max-height: 120px;
+    object-fit: contain;
+    border-radius: 6px;
+}}
+.icon-view .entry-name {{
+    word-break: break-all;
+    font-size: 0.9em;
+    margin-bottom: 4px;
+}}
+.icon-view .file-info {{
+    justify-content: center;
+}}
+
+/* 模态框通用 */
 .modal {{
     display: none;
     position: fixed;
@@ -93,14 +148,36 @@ a:hover {{
 
 .modal-content {{
     background: rgba(255,255,255,0.95);
-    margin: 10% auto;
+    margin: 5% auto;
     padding: 25px;
     border-radius: 12px;
     width: 80%;
-    max-width: 600px;
+    max-width: 800px;
+    max-height: 80vh;
+    overflow-y: auto;
     box-shadow: 0 5px 30px rgba(0,0,0,0.3);
 }}
 
+.btn {{
+    padding: 8px 20px;
+    border: none;
+    border-radius: 6px;
+    background: #2c82c9;
+    color: white;
+    cursor: pointer;
+    font-size: 14px;
+    margin-right: 10px;
+}}
+
+.btn:hover {{
+    background: #1a5c8a;
+}}
+
+.btn-close {{
+    background: #999;
+}}
+
+/* 下载模态框进度条 */
 .progress-container {{
     margin: 15px 0;
 }}
@@ -133,23 +210,15 @@ a:hover {{
     background: #64B5F6;
 }}
 
-.btn {{
-    padding: 8px 20px;
-    border: none;
-    border-radius: 6px;
-    background: #2c82c9;
-    color: white;
-    cursor: pointer;
-    font-size: 14px;
-    margin-right: 10px;
-}}
-
-.btn:hover {{
-    background: #1a5c8a;
-}}
-
-.btn-close {{
-    background: #999;
+/* 文本预览 */
+.text-preview {{
+    white-space: pre-wrap;
+    font-family: monospace;
+    background: #f8f8f8;
+    padding: 15px;
+    border-radius: 8px;
+    max-height: 50vh;
+    overflow: auto;
 }}
 </style>
 </head>
@@ -158,9 +227,21 @@ a:hover {{
 
 <div class="container">
 
-<div style="display:flex;justify-content:space-between;align-items:center;">
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
 <h1>📁 {full_path}</h1>
-<a href="/settings.html">⚙ 设置</a>
+<div style="display:flex; gap:15px; align-items:center;">
+  <div class="view-controls">
+    <select id="sortSelect">
+      <option value="name-asc">名称 ↑</option>
+      <option value="name-desc">名称 ↓</option>
+      <option value="size-asc">大小 ↑</option>
+      <option value="size-desc">大小 ↓</option>
+    </select>
+    <button id="listViewBtn" class="active">📋 列表</button>
+    <button id="iconViewBtn">🎨 图标</button>
+  </div>
+  <a href="/settings.html">⚙ 设置</a>
+</div>
 </div>
 
 {info}
@@ -169,7 +250,9 @@ a:hover {{
 <a href="../">⬆ 上级目录</a>
 </div>
 
+<div id="fileContainer">
 {content}
+</div>
 
 <hr>
 <div style="text-align:center;">
@@ -183,15 +266,30 @@ a:hover {{
   <div class="modal-content">
     <h3 id="dlFileName"></h3>
     <p id="dlFileSize"></p>
-    <label>
-      <input type="checkbox" id="dlMultiThread" checked> 启用多线程下载
-    </label>
+    <label><input type="checkbox" id="dlMultiThread" checked> 启用多线程下载</label>
     <div id="dlProgressArea" class="progress-container"></div>
     <button id="dlStartBtn" class="btn">开始下载</button>
     <button id="dlCloseBtn" class="btn btn-close">关闭</button>
   </div>
 </div>
 
+<!-- 预览模态框 -->
+<div id="previewModal" class="modal">
+  <div class="modal-content">
+    <h3 id="prevTitle"></h3>
+    <div id="prevContent" style="margin:15px 0;"></div>
+    <button id="prevCloseBtn" class="btn btn-close">关闭</button>
+  </div>
+</div>
+
+<!-- 错误模态框 -->
+<div id="errorModal" class="modal">
+  <div class="modal-content">
+    <h3>⚠ 错误</h3>
+    <p id="errorMsg"></p>
+    <button id="errorCloseBtn" class="btn btn-close">关闭</button>
+  </div>
+</div>
 
 <script>
 (function(){{
@@ -201,53 +299,30 @@ a:hover {{
         document.body.style.background = `url('${{settings.bgUrl}}') fixed`;
         document.body.style.backgroundSize = "cover";
     }}
-
-    if(settings.fontColor){{
-        document.body.style.color = settings.fontColor;
-    }}
-
-    if(settings.fontSize){{
-        document.body.style.fontSize = settings.fontSize + "px";
-    }}
-
-    if(settings.linkColor){{
-        document.querySelectorAll("a").forEach(a=>{{
-            a.style.color = settings.linkColor;
-        }});
-    }}
-
-    if(settings.folderWidth){{
-        document.querySelector(".container").style.maxWidth = settings.folderWidth + "px";
-    }}
-
-    if(settings.folderHeight){{
-        document.querySelectorAll(".entry").forEach(e=>{{
-            e.style.minHeight = settings.folderHeight + "px";
-        }});
-    }}
-
-    if(settings.folderColor){{
-        document.querySelectorAll(".entry").forEach(e=>{{
-            e.style.background = settings.folderColor;
-        }});
-    }}
-
-    if(settings.bgColor){{
-        document.body.style.backgroundColor = settings.bgColor;
-    }}
-
-    if(settings.bgOpacity){{
-        document.querySelector(".container").style.background =
-            `rgba(255,255,255,${{settings.bgOpacity}})`;
-    }}
-
+    if(settings.fontColor) document.body.style.color = settings.fontColor;
+    if(settings.fontSize) document.body.style.fontSize = settings.fontSize + "px";
+    if(settings.linkColor) document.querySelectorAll("a").forEach(a=>a.style.color = settings.linkColor);
+    if(settings.folderWidth) document.querySelector(".container").style.maxWidth = settings.folderWidth + "px";
+    if(settings.folderHeight) document.querySelectorAll(".entry").forEach(e=>e.style.minHeight = settings.folderHeight + "px");
+    if(settings.folderColor) document.querySelectorAll(".entry").forEach(e=>e.style.background = settings.folderColor);
+    if(settings.bgColor) document.body.style.backgroundColor = settings.bgColor;
+    if(settings.bgOpacity) document.querySelector(".container").style.background = `rgba(255,255,255,${{settings.bgOpacity}})`;
 }})();
 </script>
 
 <script>
-// ============ 分片下载逻辑 ============
+// ============ 工具函数 ============
 
-// 下载单个文件（带进度回调）
+function formatSize(size) {{
+    for (const unit of ['B', 'KB', 'MB', 'GB', 'TB']) {{
+        if (size < 1024.0) return `${{size.toFixed(1)}} ${{unit}}`;
+        size /= 1024.0;
+    }}
+    return `${{size.toFixed(1)}} PB`;
+}}
+
+// ============ 下载与合并 ============
+
 async function downloadWithProgress(url, onProgress) {{
     const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP ${{response.status}}`);
@@ -256,18 +331,13 @@ async function downloadWithProgress(url, onProgress) {{
     const reader = response.body.getReader();
     const chunks = [];
     let received = 0;
-
     while (true) {{
         const {{ done, value }} = await reader.read();
         if (done) break;
         chunks.push(value);
         received += value.length;
-        if (onProgress && total > 0) {{
-            onProgress(received, total);
-        }}
+        if (onProgress && total > 0) onProgress(received, total);
     }}
-
-    // 合并chunks为ArrayBuffer
     const buf = new Uint8Array(received);
     let pos = 0;
     for (const chunk of chunks) {{
@@ -277,46 +347,59 @@ async function downloadWithProgress(url, onProgress) {{
     return buf.buffer;
 }}
 
-// 控制并发下载
 async function downloadAllParts(parts, useMulti, concurrency, progressCallbacks) {{
     const results = new Array(parts.length);
     let active = 0;
     let index = 0;
-
     const dlPart = async (i) => {{
         const part = parts[i];
-        const url = part.name; // 相对路径
         const onProg = (loaded, total) => {{
-            if (progressCallbacks.partProgress) {{
-                progressCallbacks.partProgress(i, loaded, total);
-            }}
+            if (progressCallbacks.partProgress) progressCallbacks.partProgress(i, loaded, total);
         }};
-        const data = await downloadWithProgress(url, onProg);
+        const data = await downloadWithProgress(part.name, onProg);
         results[i] = data;
-        if (progressCallbacks.partComplete) {{
-            progressCallbacks.partComplete(i);
-        }}
+        if (progressCallbacks.partComplete) progressCallbacks.partComplete(i);
     }};
-
     return new Promise((resolve, reject) => {{
         const next = () => {{
             while (active < concurrency && index < parts.length) {{
                 const i = index++;
                 active++;
-                dlPart(i).then(() => {{
-                    active--;
-                    next();
-                }}).catch(reject);
+                dlPart(i).then(() => {{ active--; next(); }}).catch(reject);
             }}
-            if (active === 0 && index === parts.length) {{
-                resolve(results);
-            }}
+            if (active === 0 && index === parts.length) resolve(results);
         }};
         next();
     }});
 }}
 
-// 触发浏览器保存对话框
+async function mergePartsToBlob(partsInfo, useMulti = true, onProgress) {{
+    const totalSize = partsInfo.reduce((s, p) => s + p.size, 0);
+    const partSizes = partsInfo.map(p => p.size);
+    let downloaded = 0;
+    const progressCallbacks = {{
+        partComplete: (i) => {{
+            downloaded += partSizes[i];
+            if (onProgress) onProgress(downloaded, totalSize);
+        }},
+        partProgress: null
+    }};
+    const results = await downloadAllParts(partsInfo, useMulti, useMulti ? 4 : 1, progressCallbacks);
+    const totalLength = results.reduce((sum, buf) => sum + buf.byteLength, 0);
+    const merged = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const buf of results) {{
+        merged.set(new Uint8Array(buf), offset);
+        offset += buf.byteLength;
+    }}
+    return new Blob([merged]);
+}}
+
+async function downloadFileAsBlob(url, onProgress) {{
+    const buf = await downloadWithProgress(url, onProgress);
+    return new Blob([buf]);
+}}
+
 function saveBlob(blob, filename) {{
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -328,156 +411,292 @@ function saveBlob(blob, filename) {{
     setTimeout(() => URL.revokeObjectURL(url), 5000);
 }}
 
-// 主下载流程
-async function startDownload(originalName, parts, useMulti) {{
+// ============ 预览与下载分发 ============
+
+const previewModal = document.getElementById('previewModal');
+const prevTitle = document.getElementById('prevTitle');
+const prevContent = document.getElementById('prevContent');
+const errorModal = document.getElementById('errorModal');
+const errorMsg = document.getElementById('errorMsg');
+
+function showError(msg) {{
+    errorMsg.textContent = msg;
+    errorModal.style.display = 'block';
+}}
+
+async function startDownloadFlow(entryEl) {{
+    const name = entryEl.dataset.name;
+    const url = entryEl.dataset.url;
+    const parts = entryEl.dataset.parts ? JSON.parse(entryEl.dataset.parts) : null;
+    const size = parseInt(entryEl.dataset.size);
+
     const modal = document.getElementById('downloadModal');
     const progressArea = document.getElementById('dlProgressArea');
     const startBtn = document.getElementById('dlStartBtn');
     const closeBtn = document.getElementById('dlCloseBtn');
 
-    // 清除之前的进度条
+    document.getElementById('dlFileName').textContent = '📥 下载: ' + name;
+    document.getElementById('dlFileSize').textContent = parts
+        ? '总大小: ' + formatSize(size) + ' (' + parts.length + ' 个分片)'
+        : '大小: ' + formatSize(size);
+    document.getElementById('dlMultiThread').checked = true;
     progressArea.innerHTML = '';
+    startBtn.disabled = false;
+    closeBtn.disabled = false;
 
-    // 创建主进度条
-    const mainBar = document.createElement('div');
-    mainBar.className = 'progress-bar';
-    mainBar.innerHTML = '<div class="progress-fill" id="mainFill" style="width:0%"></div>';
-    progressArea.appendChild(mainBar);
+    const newStart = startBtn.cloneNode(true);
+    startBtn.parentNode.replaceChild(newStart, startBtn);
+    newStart.addEventListener('click', async () => {{
+        const useMulti = document.getElementById('dlMultiThread').checked;
+        newStart.disabled = true;
+        closeBtn.disabled = true;
 
-    let subBars = [];
-    if (useMulti) {{
-        // 为每个分片创建子进度条
-        const subContainer = document.createElement('div');
-        subContainer.id = 'subBars';
-        parts.forEach((p, i) => {{
-            const bar = document.createElement('div');
-            bar.className = 'progress-bar sub-progress';
-            bar.innerHTML = `<div class="progress-fill sub-fill" id="subFill${{i}}" style="width:0%"></div>`;
-            subContainer.appendChild(bar);
-        }});
-        progressArea.appendChild(subContainer);
-        subBars = parts.map((_, i) => document.getElementById(`subFill${{i}}`));
-    }}
+        progressArea.innerHTML = '';
+        const mainBar = document.createElement('div');
+        mainBar.className = 'progress-bar';
+        mainBar.innerHTML = '<div class="progress-fill" id="mainFill" style="width:0%"></div>';
+        progressArea.appendChild(mainBar);
+        const mainFill = document.getElementById('mainFill');
 
-    const mainFill = document.getElementById('mainFill');
-
-    // 总大小
-    const totalSize = parts.reduce((s, p) => s + p.size, 0);
-    let downloadedBytes = 0;
-    const partSizes = parts.map(p => p.size);
-
-    // 进度回调
-    const progressCallbacks = {{
-        partProgress: (i, loaded, total) => {{
-            // 更新子进度
-            if (useMulti && subBars[i]) {{
-                const percent = total ? (loaded / total * 100) : 0;
-                subBars[i].style.width = percent + '%';
-            }}
-            // 更新主进度（累计已下载）
-            // 需要知道之前完成的累计字节
-        }},
-        partComplete: (i) => {{
-            // 一个分片下载完成，更新累计
-            downloadedBytes += partSizes[i];
-            const totalPercent = totalSize ? (downloadedBytes / totalSize * 100) : 0;
-            mainFill.style.width = totalPercent + '%';
-            if (useMulti && subBars[i]) {{
-                subBars[i].style.width = '100%';
-            }}
-        }}
-    }};
-
-    // 开始下载
-    startBtn.disabled = true;
-    closeBtn.disabled = true;
-
-    try {{
-        const concurrency = useMulti ? 4 : 1; // 多线程时并发4个
-        const results = await downloadAllParts(parts, useMulti, concurrency, progressCallbacks);
-
-        // 合并 ArrayBuffer
-        const totalLength = results.reduce((sum, buf) => sum + buf.byteLength, 0);
-        const merged = new Uint8Array(totalLength);
-        let offset = 0;
-        for (const buf of results) {{
-            merged.set(new Uint8Array(buf), offset);
-            offset += buf.byteLength;
-        }}
-
-        const blob = new Blob([merged]);
-        saveBlob(blob, originalName);
-
-        // 下载完成后关闭模态框
-        modal.style.display = 'none';
-        startBtn.disabled = false;
-        closeBtn.disabled = false;
-    }} catch (err) {{
-        alert('下载失败: ' + err.message);
-        startBtn.disabled = false;
-        closeBtn.disabled = false;
-    }}
-}}
-
-// 绑定分片条目的点击事件
-document.addEventListener('DOMContentLoaded', () => {{
-    const partEntries = document.querySelectorAll('.part-entry');
-    partEntries.forEach(entry => {{
-        entry.addEventListener('click', (e) => {{
-            e.preventDefault();
-            const originalName = entry.dataset.originalName;
-            const parts = JSON.parse(entry.dataset.parts);
-            const totalSize = parts.reduce((s, p) => s + p.size, 0);
-
-            // 显示下载模态框
-            const modal = document.getElementById('downloadModal');
-            document.getElementById('dlFileName').textContent = '📥 下载: ' + originalName;
-            document.getElementById('dlFileSize').textContent = '总大小: ' + formatSize(totalSize) + ' (' + parts.length + ' 个分片)';
-            document.getElementById('dlMultiThread').checked = true;
-            document.getElementById('dlProgressArea').innerHTML = '';
-            document.getElementById('dlStartBtn').disabled = false;
-            document.getElementById('dlCloseBtn').disabled = false;
-
-            // 绑定开始按钮
-            const startBtn = document.getElementById('dlStartBtn');
-            const newStartBtn = startBtn.cloneNode(true);
-            startBtn.parentNode.replaceChild(newStartBtn, startBtn);
-            newStartBtn.addEventListener('click', () => {{
-                const useMulti = document.getElementById('dlMultiThread').checked;
-                startDownload(originalName, parts, useMulti);
+        let subBars = [];
+        if (useMulti && parts) {{
+            const subContainer = document.createElement('div');
+            parts.forEach((p, i) => {{
+                const bar = document.createElement('div');
+                bar.className = 'progress-bar sub-progress';
+                bar.innerHTML = `<div class="progress-fill sub-fill" id="subFill${{i}}" style="width:0%"></div>`;
+                subContainer.appendChild(bar);
             }});
+            progressArea.appendChild(subContainer);
+            subBars = parts.map((_, i) => document.getElementById(`subFill${{i}}`));
+        }}
 
-            // 关闭按钮
-            document.getElementById('dlCloseBtn').onclick = () => {{
-                modal.style.display = 'none';
-            }};
-
-            modal.style.display = 'block';
-        }});
+        try {{
+            let blob;
+            if (parts) {{
+                blob = await mergePartsToBlob(parts, useMulti, (loaded, total) => {{
+                    mainFill.style.width = (loaded / total * 100) + '%';
+                }});
+                if (useMulti) subBars.forEach(b => b.style.width = '100%');
+            }} else {{
+                blob = await downloadFileAsBlob(url, (loaded, total) => {{
+                    if (total) mainFill.style.width = (loaded / total * 100) + '%';
+                }});
+                mainFill.style.width = '100%';
+            }}
+            saveBlob(blob, name);
+            modal.style.display = 'none';
+        }} catch (err) {{
+            showError('下载失败: ' + err.message);
+        }} finally {{
+            newStart.disabled = false;
+            closeBtn.disabled = false;
+        }}
     }});
 
-    // 点击模态框外部关闭
-    window.onclick = (event) => {{
-        const modal = document.getElementById('downloadModal');
-        if (event.target == modal) {{
-            modal.style.display = 'none';
+    closeBtn.onclick = () => modal.style.display = 'none';
+    modal.style.display = 'block';
+}}
+
+// 预览文本
+async function previewText(entryEl) {{
+    const name = entryEl.dataset.name;
+    const url = entryEl.dataset.url;
+    const parts = entryEl.dataset.parts ? JSON.parse(entryEl.dataset.parts) : null;
+    prevTitle.textContent = '📄 ' + name;
+    prevContent.innerHTML = '<div style="text-align:center">加载中...</div>';
+    previewModal.style.display = 'block';
+
+    try {{
+        let text;
+        if (parts) {{
+            const blob = await mergePartsToBlob(parts, true);
+            text = await blob.text();
+        }} else {{
+            const resp = await fetch(url);
+            text = await resp.text();
         }}
-    }};
+        prevContent.innerHTML = `<div class="text-preview">${{text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}}</div>`;
+    }} catch (err) {{
+        prevContent.innerHTML = `<p style="color:red">加载失败: ${{err.message}}</p>`;
+    }}
+}}
+
+// 预览音视频
+async function previewMedia(entryEl) {{
+    const name = entryEl.dataset.name;
+    const url = entryEl.dataset.url;
+    const parts = entryEl.dataset.parts ? JSON.parse(entryEl.dataset.parts) : null;
+    const type = entryEl.dataset.type;
+
+    prevTitle.textContent = (type === 'video' ? '🎬 ' : '🎵 ') + name;
+    prevContent.innerHTML = '<div style="text-align:center">加载中...</div>';
+    previewModal.style.display = 'block';
+
+    try {{
+        let blobUrl;
+        if (parts) {{
+            const blob = await mergePartsToBlob(parts, true);
+            blobUrl = URL.createObjectURL(blob);
+        }} else {{
+            blobUrl = url;
+        }}
+
+        if (type === 'video') {{
+            prevContent.innerHTML = `<video controls autoplay style="max-width:100%;max-height:60vh;" src="${{blobUrl}}"></video>`;
+        }} else {{
+            prevContent.innerHTML = `<audio controls autoplay style="width:100%;" src="${{blobUrl}}"></audio>`;
+        }}
+
+        if (parts) {{
+            previewModal.addEventListener('close', () => URL.revokeObjectURL(blobUrl), {{once: true}});
+        }}
+    }} catch (err) {{
+        prevContent.innerHTML = `<p style="color:red">加载失败: ${{err.message}}</p>`;
+    }}
+}}
+
+// 文件条目点击入口
+function handleFileClick(entryEl) {{
+    const type = entryEl.dataset.type;
+    const size = parseInt(entryEl.dataset.size);
+    const name = entryEl.dataset.name;
+
+    if (type === 'video' || type === 'audio') {{
+        previewMedia(entryEl);
+        return;
+    }}
+
+    if (type === 'text') {{
+        if (size < 1048576) {{
+            previewText(entryEl);
+        }} else {{
+            startDownloadFlow(entryEl);
+        }}
+        return;
+    }}
+
+    startDownloadFlow(entryEl);
+}}
+
+// ============ 排序与视图 ============
+
+const fileContainer = document.getElementById('fileContainer');
+let currentSort = 'name-asc';
+let currentView = 'list';
+
+function applySort() {{
+    const entries = [...fileContainer.querySelectorAll('.file-entry')];
+    const [key, order] = currentSort.split('-');
+    entries.sort((a, b) => {{
+        let valA, valB;
+        if (key === 'name') {{
+            valA = a.dataset.name.toLowerCase();
+            valB = b.dataset.name.toLowerCase();
+        }} else {{
+            valA = parseInt(a.dataset.size);
+            valB = parseInt(b.dataset.size);
+        }}
+        if (valA < valB) return order === 'asc' ? -1 : 1;
+        if (valA > valB) return order === 'asc' ? 1 : -1;
+        return 0;
+    }});
+    entries.forEach(e => fileContainer.appendChild(e));
+}}
+
+function applyView() {{
+    fileContainer.classList.toggle('icon-view', currentView === 'icon');
+    document.getElementById('listViewBtn').classList.toggle('active', currentView === 'list');
+    document.getElementById('iconViewBtn').classList.toggle('active', currentView === 'icon');
+
+    if (currentView === 'icon') {{
+        // 图标视图：显示缩略图或默认图标
+        fileContainer.querySelectorAll('.file-entry').forEach(entry => {{
+            const iconDiv = entry.querySelector('.entry-icon');
+            if (!iconDiv) return;
+            const thumb = entry.dataset.thumb;
+            if (thumb) {{
+                // 已构建时生成缩略图
+                if (!iconDiv.querySelector('img[data-thumb]')) {{
+                    iconDiv.innerHTML = `<img data-thumb src="${{thumb}}" alt="${{entry.dataset.name}}" style="max-width:100%;max-height:120px;object-fit:contain;">`;
+                }}
+            }} else {{
+                // 保持原有emoji图标
+                // 不做变动即可
+            }}
+        }});
+    }}
+}}
+
+function saveViewSettings() {{
+    localStorage.setItem('fileViewSettings', JSON.stringify({{
+        sort: currentSort,
+        view: currentView
+    }}));
+}}
+
+// 绑定控件事件
+document.getElementById('sortSelect').addEventListener('change', function() {{
+    currentSort = this.value;
+    applySort();
+    saveViewSettings();
+}});
+document.getElementById('listViewBtn').addEventListener('click', () => {{
+    currentView = 'list';
+    applyView();
+    saveViewSettings();
+}});
+document.getElementById('iconViewBtn').addEventListener('click', () => {{
+    currentView = 'icon';
+    applyView();
+    saveViewSettings();
 }});
 
-function formatSize(size) {{
-    for (const unit of ['B', 'KB', 'MB', 'GB', 'TB']) {{
-        if (size < 1024.0) return `${{size.toFixed(1)}} ${{unit}}`;
-        size /= 1024.0;
+// 初始化
+document.addEventListener('DOMContentLoaded', () => {{
+    const saved = JSON.parse(localStorage.getItem('fileViewSettings') || '{{}}');
+    if (saved.sort) {{
+        currentSort = saved.sort;
+        document.getElementById('sortSelect').value = currentSort;
     }}
-    return `${{size.toFixed(1)}} PB`;
-}}
+    if (saved.view) {{
+        currentView = saved.view;
+        applyView();
+    }}
+    applySort();
+
+    fileContainer.addEventListener('click', (e) => {{
+        const entry = e.target.closest('.file-entry');
+        if (entry) handleFileClick(entry);
+    }});
+
+    document.getElementById('prevCloseBtn').onclick = () => previewModal.style.display = 'none';
+    document.getElementById('errorCloseBtn').onclick = () => errorModal.style.display = 'none';
+    window.onclick = (event) => {{
+        if (event.target == previewModal) previewModal.style.display = 'none';
+        if (event.target == errorModal) errorModal.style.display = 'none';
+        if (event.target == document.getElementById('downloadModal')) document.getElementById('downloadModal').style.display = 'none';
+    }};
+
+    const params = new URLSearchParams(window.location.search);
+    const target = params.get('target');
+    if (target) {{
+        const found = [...fileContainer.querySelectorAll('.file-entry')].find(e => e.dataset.name === target);
+        if (found) {{
+            handleFileClick(found);
+        }} else {{
+            showError('文件不存在：' + target);
+        }}
+    }}
+}});
 </script>
-<!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{{"token": "eab93a94af294e41b8f2d7e7c2d83b8a"}}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>
 """
 
+# =========================
+# 条目模板（用于生成HTML片段）
+# =========================
 
 dir_template = """
 <a href="{dir_name}/index.html" class="entry">
@@ -486,18 +705,11 @@ dir_template = """
 </a>
 """
 
-file_template = """
-<a href="{file_name}" class="entry">
-<span>{icon} {file_name}</span>
-<span class="file-info"><span>{size}</span></span>
-</a>
-"""
-
-# 分片文件条目模板
-part_file_template = """
-<div class="entry part-entry" data-original-name="{original_name}" data-parts='{parts_json}' style="cursor:pointer;">
-<span>🧩 {original_name} <small style="color:#888;">(分片)</small></span>
-<span class="file-info"><span>{size}</span></span>
+file_entry_template = """
+<div class="entry file-entry" data-name="{name}" data-url="{url}" data-type="{type}" data-size="{size}" data-thumb="{thumb}" {parts_attr}>
+  <span class="entry-icon">{icon}</span>
+  <span class="entry-name">{name}</span>
+  <span class="file-info"><span>{size_text}</span></span>
 </div>
 """
 
@@ -527,14 +739,56 @@ def format_size(size):
 def get_file_icon(name):
     ext = name.lower().split('.')[-1]
     icons = {
-        "zip":"📦","rar":"📦","7z":"📦",
-        "mp4":"🎬","mkv":"🎬",
-        "mp3":"🎵","flac":"🎵",
-        "png":"🖼","jpg":"🖼","jpeg":"🖼","gif":"🖼",
-        "pdf":"📕","txt":"📄",
-        "py":"🐍","html":"🌐"
+        "zip": "📦", "rar": "📦", "7z": "📦",
+        "mp4": "🎬", "mkv": "🎬", "webm": "🎬", "avi": "🎬",
+        "mp3": "🎵", "flac": "🎵", "wav": "🎵", "ogg": "🎵", "m4a": "🎵",
+        "png": "🖼", "jpg": "🖼", "jpeg": "🖼", "gif": "🖼", "bmp": "🖼", "svg": "🖼",
+        "pdf": "📕", "txt": "📄", "py": "🐍", "html": "🌐", "css": "🎨", "js": "📜",
+        "json": "📊", "xml": "📊", "md": "📝", "log": "📜", "yaml": "📄"
     }
-    return icons.get(ext,"📄")
+    return icons.get(ext, "📄")
+
+
+def classify_file(name):
+    ext = name.lower().split('.')[-1]
+    video_exts = {'mp4', 'mkv', 'webm', 'avi', 'mov', 'flv', 'wmv'}
+    audio_exts = {'mp3', 'flac', 'wav', 'ogg', 'm4a', 'aac', 'wma'}
+    image_exts = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg', 'webp'}
+    text_exts = {'txt', 'py', 'js', 'html', 'css', 'json', 'xml', 'md', 'log', 'yaml', 'yml', 'sh', 'bat'}
+    if ext in video_exts:
+        return 'video'
+    if ext in audio_exts:
+        return 'audio'
+    if ext in image_exts:
+        return 'image'
+    if ext in text_exts:
+        return 'text'
+    return 'other'
+
+
+def generate_thumbnail(file_path, thumb_name="thumb.jpg", size=(200, 200)):
+    """
+    生成缩略图并保存到同目录下。返回缩略图文件名（相对路径），失败返回 None。
+    """
+    try:
+        img = Image.open(file_path)
+        img.thumbnail(size)
+        thumb_dir = os.path.dirname(file_path)
+        thumb_path = os.path.join(thumb_dir, thumb_name)
+        # 统一转为JPEG格式（RGBA转RGB）
+        if img.mode in ('RGBA', 'LA', 'P'):
+            img = img.convert('RGBA')
+            # 创建白色背景
+            background = Image.new('RGBA', img.size, (255, 255, 255, 255))
+            background.paste(img, mask=img.split()[-1])
+            img = background.convert('RGB')
+        else:
+            img = img.convert('RGB')
+        img.save(thumb_path, 'JPEG', quality=85)
+        return thumb_name
+    except Exception as e:
+        print(f"⚠️ 缩略图生成失败 ({file_path}): {e}")
+        return None
 
 
 # =========================
@@ -584,13 +838,12 @@ def generate_index_html(root_dir):
                 part_num = int(m.group(2))
                 potential_parts.setdefault(base, []).append((fn, part_num))
 
-        part_groups = {}  # base -> list of (filename, part_num) sorted
+        part_groups = {}
         all_part_files = set()
         for base, parts in potential_parts.items():
             parts.sort(key=lambda x: x[1])
-            # 检查是否从1开始且连续，至少两个文件
             numbers = [p[1] for p in parts]
-            if len(parts) >= 2 and numbers == list(range(1, len(parts)+1)):
+            if len(parts) >= 2 and numbers == list(range(1, len(parts) + 1)):
                 part_groups[base] = parts
                 for fn, _ in parts:
                     all_part_files.add(fn)
@@ -604,48 +857,70 @@ def generate_index_html(root_dir):
                 size=dir_size
             )
 
-        # 生成分片组条目
+        # 生成分片组条目（大文件）
         for base in sorted(part_groups.keys()):
             parts = part_groups[base]
             total_size = sum(os.path.getsize(os.path.join(root, fn)) for fn, _ in parts)
-            # 构建 parts JSON 列表
             parts_info = []
             for fn, num in parts:
                 fpath = os.path.join(root, fn)
                 fsize = os.path.getsize(fpath)
                 parts_info.append({"name": fn, "size": fsize})
             parts_json = json.dumps(parts_info, ensure_ascii=False)
-            content += part_file_template.format(
-                original_name=base,
-                size=format_size(total_size),
-                parts_json=parts_json
+            icon = get_file_icon(base)
+            ftype = classify_file(base)
+            # 分片文件不生成缩略图（无法直接读取）
+            content += file_entry_template.format(
+                name=base,
+                url="",
+                type=ftype,
+                size=total_size,
+                size_text=format_size(total_size),
+                icon=icon,
+                thumb="",  # 无缩略图
+                parts_attr=f'data-parts=\'{parts_json}\''
             )
 
-        # 生成普通文件条目（排除分片内的文件）
+        # 生成普通文件条目
         for file_name in sorted(files):
             if file_name in ['index.html', 'info.json', 'info.md']:
                 continue
             if file_name in all_part_files:
                 continue
             file_path = os.path.join(root, file_name)
-            file_size = format_size(os.path.getsize(file_path))
+            file_size = os.path.getsize(file_path)
             icon = get_file_icon(file_name)
+            ftype = classify_file(file_name)
 
-            content += file_template.format(
-                file_name=file_name,
+            # 构建缩略图（仅图片文件，且非分片）
+            thumb_url = ""
+            if ftype == 'image':
+                # 生成缩略图并保存到当前目录
+                thumb_filename = file_name + ".thumb.jpg"
+                thumb_result = generate_thumbnail(file_path, thumb_filename)
+                if thumb_result:
+                    thumb_url = thumb_filename  # 相对路径
+                else:
+                    thumb_url = ""
+
+            content += file_entry_template.format(
+                name=file_name,
+                url=file_name,
+                type=ftype,
                 size=file_size,
-                icon=icon
+                size_text=format_size(file_size),
+                icon=icon,
+                thumb=thumb_url,
+                parts_attr=""
             )
 
-        # 生成 info.json（保持记录所有真实文件，包括分片）
+        # 生成 info.json
         info = {"files": [], "dirs": []}
-
         for file_name in files:
             if file_name not in ['index.html', 'info.json', 'info.md']:
                 file_path = os.path.join(root, file_name)
                 with open(file_path, 'rb') as f:
                     sha256_hash = hashlib.sha256(f.read()).hexdigest()
-
                 info["files"].append({
                     "name": file_name,
                     "sha256": sha256_hash,
@@ -685,7 +960,6 @@ def generate_index_html(root_dir):
 # =========================
 
 if __name__ == "__main__":
-
     source_dir = "."
     output_dir = "output"
 
