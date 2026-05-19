@@ -4,7 +4,7 @@ import hashlib
 import markdown
 import shutil
 import re
-from PIL import Image  # 新增：用于生成缩略图
+from PIL import Image  # 用于生成缩略图
 
 # =========================
 # HTML 模板
@@ -156,6 +156,7 @@ a:hover {{
     max-height: 80vh;
     overflow-y: auto;
     box-shadow: 0 5px 30px rgba(0,0,0,0.3);
+    position: relative;
 }}
 
 .btn {{
@@ -219,6 +220,13 @@ a:hover {{
     border-radius: 8px;
     max-height: 50vh;
     overflow: auto;
+    margin-bottom: 50px;
+}}
+
+.text-download-btn {{
+    position: absolute;
+    bottom: 20px;
+    right: 25px;
 }}
 </style>
 </head>
@@ -261,7 +269,7 @@ a:hover {{
 
 </div>
 
-<!-- 下载模态框 -->
+<!-- 下载模态框（仅用于分片大文件） -->
 <div id="downloadModal" class="modal">
   <div class="modal-content">
     <h3 id="dlFileName"></h3>
@@ -273,12 +281,12 @@ a:hover {{
   </div>
 </div>
 
-<!-- 预览模态框 -->
+<!-- 预览模态框（音视频/图片/文本） -->
 <div id="previewModal" class="modal">
   <div class="modal-content">
     <h3 id="prevTitle"></h3>
     <div id="prevContent" style="margin:15px 0;"></div>
-    <button id="prevCloseBtn" class="btn btn-close">关闭</button>
+    <button id="prevCloseBtn" class="btn btn-close" style="position:absolute; top:15px; right:15px;">关闭</button>
   </div>
 </div>
 
@@ -411,6 +419,16 @@ function saveBlob(blob, filename) {{
     setTimeout(() => URL.revokeObjectURL(url), 5000);
 }}
 
+// 直接下载（浏览器默认下载，无模态框）
+function downloadFileDirectly(name, url) {{
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}}
+
 // ============ 预览与下载分发 ============
 
 const previewModal = document.getElementById('previewModal');
@@ -424,9 +442,9 @@ function showError(msg) {{
     errorModal.style.display = 'block';
 }}
 
+// 下载窗格（仅用于分片文件）
 async function startDownloadFlow(entryEl) {{
     const name = entryEl.dataset.name;
-    const url = entryEl.dataset.url;
     const parts = entryEl.dataset.parts ? JSON.parse(entryEl.dataset.parts) : null;
     const size = parseInt(entryEl.dataset.size);
 
@@ -436,9 +454,7 @@ async function startDownloadFlow(entryEl) {{
     const closeBtn = document.getElementById('dlCloseBtn');
 
     document.getElementById('dlFileName').textContent = '📥 下载: ' + name;
-    document.getElementById('dlFileSize').textContent = parts
-        ? '总大小: ' + formatSize(size) + ' (' + parts.length + ' 个分片)'
-        : '大小: ' + formatSize(size);
+    document.getElementById('dlFileSize').textContent = '总大小: ' + formatSize(size) + ' (' + parts.length + ' 个分片)';
     document.getElementById('dlMultiThread').checked = true;
     progressArea.innerHTML = '';
     startBtn.disabled = false;
@@ -459,7 +475,7 @@ async function startDownloadFlow(entryEl) {{
         const mainFill = document.getElementById('mainFill');
 
         let subBars = [];
-        if (useMulti && parts) {{
+        if (useMulti) {{
             const subContainer = document.createElement('div');
             parts.forEach((p, i) => {{
                 const bar = document.createElement('div');
@@ -472,18 +488,10 @@ async function startDownloadFlow(entryEl) {{
         }}
 
         try {{
-            let blob;
-            if (parts) {{
-                blob = await mergePartsToBlob(parts, useMulti, (loaded, total) => {{
-                    mainFill.style.width = (loaded / total * 100) + '%';
-                }});
-                if (useMulti) subBars.forEach(b => b.style.width = '100%');
-            }} else {{
-                blob = await downloadFileAsBlob(url, (loaded, total) => {{
-                    if (total) mainFill.style.width = (loaded / total * 100) + '%';
-                }});
-                mainFill.style.width = '100%';
-            }}
+            const blob = await mergePartsToBlob(parts, useMulti, (loaded, total) => {{
+                mainFill.style.width = (loaded / total * 100) + '%';
+            }});
+            if (useMulti) subBars.forEach(b => b.style.width = '100%');
             saveBlob(blob, name);
             modal.style.display = 'none';
         }} catch (err) {{
@@ -498,7 +506,32 @@ async function startDownloadFlow(entryEl) {{
     modal.style.display = 'block';
 }}
 
-// 预览文本
+// 图片预览
+async function previewImage(entryEl) {{
+    const name = entryEl.dataset.name;
+    const url = entryEl.dataset.url;
+    const parts = entryEl.dataset.parts ? JSON.parse(entryEl.dataset.parts) : null;
+    prevTitle.textContent = '🖼 ' + name;
+    prevContent.innerHTML = '<div style="text-align:center">加载中...</div>';
+    previewModal.style.display = 'block';
+
+    try {{
+        let imgSrc;
+        if (parts) {{
+            const blob = await mergePartsToBlob(parts, true);
+            imgSrc = URL.createObjectURL(blob);
+            const release = () => URL.revokeObjectURL(imgSrc);
+            previewModal.addEventListener('close', release, {{once: true}});
+        }} else {{
+            imgSrc = url;
+        }}
+        prevContent.innerHTML = `<img src="${{imgSrc}}" alt="${{name}}" style="max-width:100%;max-height:70vh;display:block;margin:0 auto;">`;
+    }} catch (err) {{
+        prevContent.innerHTML = `<p style="color:red">加载失败: ${{err.message}}</p>`;
+    }}
+}}
+
+// 文本预览
 async function previewText(entryEl) {{
     const name = entryEl.dataset.name;
     const url = entryEl.dataset.url;
@@ -508,21 +541,29 @@ async function previewText(entryEl) {{
     previewModal.style.display = 'block';
 
     try {{
-        let text;
+        let text, blob;
         if (parts) {{
-            const blob = await mergePartsToBlob(parts, true);
+            blob = await mergePartsToBlob(parts, true);
             text = await blob.text();
         }} else {{
             const resp = await fetch(url);
-            text = await resp.text();
+            blob = await resp.blob();
+            text = await blob.text();
         }}
-        prevContent.innerHTML = `<div class="text-preview">${{text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}}</div>`;
+        // 显示文本 + 下载按钮
+        prevContent.innerHTML = `
+            <div class="text-preview">${{text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}}</div>
+            <button id="textDownloadBtn" class="btn text-download-btn">⬇ 下载</button>
+        `;
+        document.getElementById('textDownloadBtn').onclick = () => {{
+            saveBlob(blob, name);
+        }};
     }} catch (err) {{
         prevContent.innerHTML = `<p style="color:red">加载失败: ${{err.message}}</p>`;
     }}
 }}
 
-// 预览音视频
+// 音视频预览
 async function previewMedia(entryEl) {{
     const name = entryEl.dataset.name;
     const url = entryEl.dataset.url;
@@ -538,6 +579,8 @@ async function previewMedia(entryEl) {{
         if (parts) {{
             const blob = await mergePartsToBlob(parts, true);
             blobUrl = URL.createObjectURL(blob);
+            const release = () => URL.revokeObjectURL(blobUrl);
+            previewModal.addEventListener('close', release, {{once: true}});
         }} else {{
             blobUrl = url;
         }}
@@ -546,10 +589,6 @@ async function previewMedia(entryEl) {{
             prevContent.innerHTML = `<video controls autoplay style="max-width:100%;max-height:60vh;" src="${{blobUrl}}"></video>`;
         }} else {{
             prevContent.innerHTML = `<audio controls autoplay style="width:100%;" src="${{blobUrl}}"></audio>`;
-        }}
-
-        if (parts) {{
-            previewModal.addEventListener('close', () => URL.revokeObjectURL(blobUrl), {{once: true}});
         }}
     }} catch (err) {{
         prevContent.innerHTML = `<p style="color:red">加载失败: ${{err.message}}</p>`;
@@ -561,22 +600,26 @@ function handleFileClick(entryEl) {{
     const type = entryEl.dataset.type;
     const size = parseInt(entryEl.dataset.size);
     const name = entryEl.dataset.name;
+    const url = entryEl.dataset.url;
+    const parts = entryEl.dataset.parts ? JSON.parse(entryEl.dataset.parts) : null;
 
+    // 分片文件：必须弹窗下载
+    if (parts && parts.length > 0) {{
+        startDownloadFlow(entryEl);
+        return;
+    }}
+
+    // 普通文件：根据类型处理
     if (type === 'video' || type === 'audio') {{
         previewMedia(entryEl);
-        return;
+    }} else if (type === 'image') {{
+        previewImage(entryEl);
+    }} else if (type === 'text' && size < 1048576) {{
+        previewText(entryEl);
+    }} else {{
+        // 其它所有情况直接下载（包括大文本、压缩包、未知类型等）
+        downloadFileDirectly(name, url);
     }}
-
-    if (type === 'text') {{
-        if (size < 1048576) {{
-            previewText(entryEl);
-        }} else {{
-            startDownloadFlow(entryEl);
-        }}
-        return;
-    }}
-
-    startDownloadFlow(entryEl);
 }}
 
 // ============ 排序与视图 ============
@@ -610,19 +653,14 @@ function applyView() {{
     document.getElementById('iconViewBtn').classList.toggle('active', currentView === 'icon');
 
     if (currentView === 'icon') {{
-        // 图标视图：显示缩略图或默认图标
         fileContainer.querySelectorAll('.file-entry').forEach(entry => {{
             const iconDiv = entry.querySelector('.entry-icon');
             if (!iconDiv) return;
             const thumb = entry.dataset.thumb;
             if (thumb) {{
-                // 已构建时生成缩略图
                 if (!iconDiv.querySelector('img[data-thumb]')) {{
                     iconDiv.innerHTML = `<img data-thumb src="${{thumb}}" alt="${{entry.dataset.name}}" style="max-width:100%;max-height:120px;object-fit:contain;">`;
                 }}
-            }} else {{
-                // 保持原有emoji图标
-                // 不做变动即可
             }}
         }});
     }}
@@ -670,14 +708,22 @@ document.addEventListener('DOMContentLoaded', () => {{
         if (entry) handleFileClick(entry);
     }});
 
-    document.getElementById('prevCloseBtn').onclick = () => previewModal.style.display = 'none';
+    document.getElementById('prevCloseBtn').onclick = () => {{
+        previewModal.style.display = 'none';
+        // 触发 close 事件以便清理 blob
+        previewModal.dispatchEvent(new Event('close'));
+    }};
     document.getElementById('errorCloseBtn').onclick = () => errorModal.style.display = 'none';
     window.onclick = (event) => {{
-        if (event.target == previewModal) previewModal.style.display = 'none';
+        if (event.target == previewModal) {{
+            previewModal.style.display = 'none';
+            previewModal.dispatchEvent(new Event('close'));
+        }}
         if (event.target == errorModal) errorModal.style.display = 'none';
         if (event.target == document.getElementById('downloadModal')) document.getElementById('downloadModal').style.display = 'none';
     }};
 
+    // 处理 ?target= 参数
     const params = new URLSearchParams(window.location.search);
     const target = params.get('target');
     if (target) {{
@@ -778,7 +824,6 @@ def generate_thumbnail(file_path, thumb_name="thumb.jpg", size=(200, 200)):
         # 统一转为JPEG格式（RGBA转RGB）
         if img.mode in ('RGBA', 'LA', 'P'):
             img = img.convert('RGBA')
-            # 创建白色背景
             background = Image.new('RGBA', img.size, (255, 255, 255, 255))
             background.paste(img, mask=img.split()[-1])
             img = background.convert('RGB')
@@ -869,7 +914,7 @@ def generate_index_html(root_dir):
             parts_json = json.dumps(parts_info, ensure_ascii=False)
             icon = get_file_icon(base)
             ftype = classify_file(base)
-            # 分片文件不生成缩略图（无法直接读取）
+            # 分片文件 url 留空，thumb 留空
             content += file_entry_template.format(
                 name=base,
                 url="",
@@ -877,7 +922,7 @@ def generate_index_html(root_dir):
                 size=total_size,
                 size_text=format_size(total_size),
                 icon=icon,
-                thumb="",  # 无缩略图
+                thumb="",
                 parts_attr=f'data-parts=\'{parts_json}\''
             )
 
@@ -892,14 +937,13 @@ def generate_index_html(root_dir):
             icon = get_file_icon(file_name)
             ftype = classify_file(file_name)
 
-            # 构建缩略图（仅图片文件，且非分片）
+            # 构建缩略图（仅图片文件）
             thumb_url = ""
             if ftype == 'image':
-                # 生成缩略图并保存到当前目录
                 thumb_filename = file_name + ".thumb.jpg"
                 thumb_result = generate_thumbnail(file_path, thumb_filename)
                 if thumb_result:
-                    thumb_url = thumb_filename  # 相对路径
+                    thumb_url = thumb_filename
                 else:
                     thumb_url = ""
 
