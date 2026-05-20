@@ -4,7 +4,7 @@ import hashlib
 import markdown
 import shutil
 import re
-from PIL import Image  # 用于生成缩略图
+from PIL import Image
 
 # =========================
 # HTML 模板（已修改 JavaScript）
@@ -414,9 +414,12 @@ async function mergePartsToBlob(partsInfo, useMulti = true, onProgress, onPartPr
         }}
     }};
     
-    const settings = JSON.parse(localStorage.getItem("siteSettings") || "{}");
-    let concurrency = parseInt(settings.downloadThreads, 10) || 6;
-    concurrency = useMulti ? concurrency : 1;
+    // 从设置中读取下载线程数
+    let concurrency = 1;
+    if (useMulti) {{
+        const settings = JSON.parse(localStorage.getItem("siteSettings") || "{{}}");
+        concurrency = parseInt(settings.downloadThreads, 10) || 6;
+    }}
     const results = await downloadAllParts(partsInfo, useMulti, concurrency, progressCallbacks);
     const totalLength = results.reduce((sum, buf) => sum + buf.byteLength, 0);
     const merged = new Uint8Array(totalLength);
@@ -774,7 +777,6 @@ document.addEventListener('DOMContentLoaded', () => {{
 
     document.getElementById('prevCloseBtn').onclick = () => {{
         previewModal.style.display = 'none';
-        // 触发 close 事件以便清理 blob
         previewModal.dispatchEvent(new Event('close'));
     }};
     document.getElementById('errorCloseBtn').onclick = () => errorModal.style.display = 'none';
