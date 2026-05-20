@@ -413,8 +413,13 @@ async function mergePartsToBlob(partsInfo, useMulti = true, onProgress, onPartPr
             if (onPartProgress) onPartProgress(i, partTotals[i], partTotals[i]);
         }}
     }};
-    
-    const results = await downloadAllParts(partsInfo, useMulti, useMulti ? 4 : 1, progressCallbacks);
+    let concurre = 6; // 默认值
+    const settings = JSON.parse(localStorage.getItem("siteSettings") || "{}");
+    if (settings.downloadThreads) {
+        concurre = parseInt(settings.downloadThreads, 10) || 6;
+    }
+    concurre = useMulti ? concurre : 1;
+    const results = await downloadAllParts(partsInfo, useMulti, concurre, progressCallbacks);
     const totalLength = results.reduce((sum, buf) => sum + buf.byteLength, 0);
     const merged = new Uint8Array(totalLength);
     let offset = 0;
