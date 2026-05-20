@@ -7,7 +7,7 @@ import re
 from PIL import Image  # 用于生成缩略图
 
 # =========================
-# HTML 模板
+# HTML 模板（已修改 JavaScript）
 # =========================
 
 template = """
@@ -329,6 +329,12 @@ function formatSize(size) {{
     return `${{size.toFixed(1)}} PB`;
 }}
 
+function formatSpeed(bytesPerSec) {{
+    if (bytesPerSec < 1024) return bytesPerSec.toFixed(1) + ' B/s';
+    if (bytesPerSec < 1024*1024) return (bytesPerSec/1024).toFixed(1) + ' KB/s';
+    return (bytesPerSec/(1024*1024)).toFixed(1) + ' MB/s';
+}}
+
 // ============ 下载与合并 ============
 
 async function downloadWithProgress(url, onProgress) {{
@@ -381,17 +387,33 @@ async function downloadAllParts(parts, useMulti, concurrency, progressCallbacks)
     }});
 }}
 
-async function mergePartsToBlob(partsInfo, useMulti = true, onProgress) {{
+async function mergePartsToBlob(partsInfo, useMulti = true, onProgress, onPartProgress) {{
     const totalSize = partsInfo.reduce((s, p) => s + p.size, 0);
-    const partSizes = partsInfo.map(p => p.size);
+    const partTotals = partsInfo.map(p => p.size);
+    const partLoaded = new Array(partsInfo.length).fill(0);
     let downloaded = 0;
+    
     const progressCallbacks = {{
-        partComplete: (i) => {{
-            downloaded += partSizes[i];
-            if (onProgress) onProgress(downloaded, totalSize);
+        partProgress: (i, loaded, total) => {{
+            const delta = loaded - partLoaded[i];
+            if (delta > 0) {{
+                downloaded += delta;
+                partLoaded[i] = loaded;
+                if (onProgress) onProgress(downloaded, totalSize);
+            }}
+            if (onPartProgress) onPartProgress(i, loaded, total);
         }},
-        partProgress: null
+        partComplete: (i) => {{
+            const remaining = partTotals[i] - partLoaded[i];
+            if (remaining > 0) {{
+                downloaded += remaining;
+                partLoaded[i] = partTotals[i];
+                if (onProgress) onProgress(downloaded, totalSize);
+            }}
+            if (onPartProgress) onPartProgress(i, partTotals[i], partTotals[i]);
+        }}
     }};
+    
     const results = await downloadAllParts(partsInfo, useMulti, useMulti ? 4 : 1, progressCallbacks);
     const totalLength = results.reduce((sum, buf) => sum + buf.byteLength, 0);
     const merged = new Uint8Array(totalLength);
@@ -474,6 +496,18 @@ async function startDownloadFlow(entryEl) {{
         progressArea.appendChild(mainBar);
         const mainFill = document.getElementById('mainFill');
 
+        const percentSpan = document.createElement('span');
+        percentSpan.id = 'dlPercent';
+        percentSpan.textContent = '0%';
+        percentSpan.style.marginLeft = '10px';
+        progressArea.appendChild(percentSpan);
+
+        const speedSpan = document.createElement('span');
+        speedSpan.id = 'dlSpeed';
+        speedSpan.textContent = '0 B/s';
+        speedSpan.style.marginLeft = '10px';
+        progressArea.appendChild(speedSpan);
+
         let subBars = [];
         if (useMulti) {{
             const subContainer = document.createElement('div');
@@ -487,10 +521,38 @@ async function startDownloadFlow(entryEl) {{
             subBars = parts.map((_, i) => document.getElementById(`subFill${{i}}`));
         }}
 
+        let lastTime = Date.now();
+        let lastLoaded = 0;
+        const maxSpeed = 10 * 1024 * 1024; // 10 MB/s 颜色阈值
+
         try {{
-            const blob = await mergePartsToBlob(parts, useMulti, (loaded, total) => {{
-                mainFill.style.width = (loaded / total * 100) + '%';
-            }});
+            const blob = await mergePartsToBlob(parts, useMulti, 
+                (loaded, total) => {{
+                    const percent = (loaded / total * 100).toFixed(1);
+                    mainFill.style.width = percent + '%';
+                    percentSpan.textContent = percent + '%';
+                    
+                    const now = Date.now();
+                    const elapsed = (now - lastTime) / 1000;
+                    if (elapsed > 0.3) {{  // 避免更新过快
+                        const speed = (loaded - lastLoaded) / elapsed;
+                        speedSpan.textContent = formatSpeed(speed);
+                        const ratio = Math.min(speed / maxSpeed, 1);
+                        const red = 255;
+                        const green = Math.round(255 * (1 - ratio));
+                        const blue = Math.round(255 * (1 - ratio));
+                        speedSpan.style.color = `rgb(${{red}},${{green}},${{blue}})`;
+                        speedSpan.style.fontWeight = speed > maxSpeed ? 'bold' : 'normal';
+                        lastTime = now;
+                        lastLoaded = loaded;
+                    }}
+                }},
+                (i, loaded, total) => {{
+                    if (useMulti && subBars[i]) {{
+                        subBars[i].style.width = (loaded / total * 100) + '%';
+                    }}
+                }}
+            );
             if (useMulti) subBars.forEach(b => b.style.width = '100%');
             saveBlob(blob, name);
             modal.style.display = 'none';
@@ -550,7 +612,6 @@ async function previewText(entryEl) {{
             blob = await resp.blob();
             text = await blob.text();
         }}
-        // 显示文本 + 下载按钮
         prevContent.innerHTML = `
             <div class="text-preview">${{text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}}</div>
             <button id="textDownloadBtn" class="btn text-download-btn">⬇ 下载</button>
@@ -617,8 +678,8 @@ function handleFileClick(entryEl) {{
     }} else if (type === 'text' && size < 1048576) {{
         previewText(entryEl);
     }} else {{
-        // 其它所有情况直接下载（包括大文本、压缩包、未知类型等）
-        downloadFileDirectly(name, url);
+        // 其它所有无法预览的文件直接交给浏览器处理（导航到链接）
+        window.location.href = url;
     }}
 }}
 
@@ -914,7 +975,6 @@ def generate_index_html(root_dir):
             parts_json = json.dumps(parts_info, ensure_ascii=False)
             icon = get_file_icon(base)
             ftype = classify_file(base)
-            # 分片文件 url 留空，thumb 留空
             content += file_entry_template.format(
                 name=base,
                 url="",
