@@ -1281,6 +1281,7 @@ def generate_index_html(root_dir):
       
         
         # 生成 .link 文件条目（替换原来的这一段）
+        # 生成 .link 文件条目
         link_files = [f for f in files if f.endswith('.link')]
         for link_file in sorted(link_files):
             link_path = os.path.join(root, link_file)
@@ -1297,17 +1298,17 @@ def generate_index_html(root_dir):
             extra_attrs = (
                 f'data-redirect="{str(redirect).lower()}" '
                 f'data-threads="{threads}"'
-        )
-        content += file_entry_template.format(
-            name=html.escape(link_name, quote=True),
-            url=html.escape(url, quote=True),
-            type='link',
-            size=0,
-            size_text='链接',
-            icon='🔗',
-            thumb='',
-            parts_attr=extra_attrs
-        )
+            )
+            content += file_entry_template.format(
+                name=html.escape(link_name, quote=True),
+                url=html.escape(url, quote=True),
+                type='link',
+                size=0,
+                size_text='链接',
+                icon='🔗',
+                thumb='',
+                parts_attr=extra_attrs
+            )
 
         # 生成普通文件条目
         for file_name in sorted(files):
