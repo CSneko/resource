@@ -8,39 +8,41 @@ from PIL import Image
 import html
 
 # =========================
-# HTML 模板（已修改 JavaScript）
+# HTML 模板
+# 注意：占位符改为 %%FULL_PATH%% / %%INFO%% / %%CONTENT%%
+#       模板内部不再使用 .format()，所有 { } 直接写，无需双写转义
 # =========================
 
 template = """
 <html>
 <head>
 <meta charset="utf-8">
-<title>{full_path} - CrystalNekoの资源站</title>
+<title>%%FULL_PATH%% - CrystalNekoの资源站</title>
 
 <style>
-html, body {{
+html, body {
     margin: 0;
     padding: 0;
     min-height: 100vh;
     background-size: cover;
     background-position: center;
-}}
+}
 
-body {{
+body {
     background: url('https://www.loliapi.com/acg') fixed;
     font-family: Arial, sans-serif;
-}}
+}
 
-.container {{
+.container {
     max-width: 800px;
     margin: 20px auto;
     background: rgba(255, 255, 255, 0.9);
     border-radius: 15px;
     padding: 30px;
     box-shadow: 0 0 20px rgba(0,0,0,0.2);
-}}
+}
 
-.entry {{
+.entry {
     text-decoration: none !important;
     color: #333 !important;
     display: flex;
@@ -52,91 +54,91 @@ body {{
     border-radius: 8px;
     transition: all 0.3s;
     cursor: pointer;
-}}
+}
 
-.entry:hover {{
+.entry:hover {
     transform: translateX(10px);
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     background: rgba(235, 245, 255, 0.9);
-}}
+}
 
-.file-info {{
+.file-info {
     display: flex;
     gap: 15px;
     color: #666;
     font-size: 0.9em;
-}}
+}
 
-h1 {{
+h1 {
     color: #333;
-}}
+}
 
-a {{
+a {
     color: #2c82c9;
     text-decoration: none;
-}}
+}
 
-a:hover {{
+a:hover {
     text-decoration: underline;
-}}
+}
 
 /* 视图控制条 */
-.view-controls {{
+.view-controls {
     display: flex;
     gap: 10px;
     align-items: center;
-}}
-.view-controls select, .view-controls button {{
+}
+.view-controls select, .view-controls button {
     padding: 4px 8px;
     border-radius: 4px;
     border: 1px solid #ccc;
     background: white;
     cursor: pointer;
-}}
-.view-controls button.active {{
+}
+.view-controls button.active {
     background: #2c82c9;
     color: white;
     border-color: #2c82c9;
-}}
+}
 
 /* 图标视图 */
-.icon-view {{
+.icon-view {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 15px;
-}}
-.icon-view .entry {{
+}
+.icon-view .entry {
     flex-direction: column;
     text-align: center;
     padding: 15px 8px;
     transform: none !important;
-}}
-.icon-view .entry:hover {{
+}
+.icon-view .entry:hover {
     transform: scale(1.03) !important;
-}}
-.icon-view .entry-icon {{
+}
+.icon-view .entry-icon {
     font-size: 3em;
     margin-bottom: 8px;
     width: 100%;
     overflow: hidden;
-}}
-.icon-view .entry-icon img {{
+}
+.icon-view .entry-icon img {
     max-width: 100%;
     max-height: 120px;
     object-fit: contain;
     border-radius: 6px;
-}}
-.icon-view .entry-name {{
+}
+.icon-view .entry-name {
     word-break: break-all;
     font-size: 0.9em;
     margin-bottom: 4px;
-}}
-.icon-view .file-info {{
+}
+.icon-view .file-info {
     justify-content: center;
-}}
+}
 
 /* 模态框通用 */
-.modal {{
+.modal {
     display: none;
     position: fixed;
     z-index: 1000;
@@ -145,9 +147,9 @@ a:hover {{
     width: 100%;
     height: 100%;
     background-color: rgba(0,0,0,0.5);
-}}
+}
 
-.modal-content {{
+.modal-content {
     background: rgba(255,255,255,0.95);
     margin: 5% auto;
     padding: 25px;
@@ -158,9 +160,9 @@ a:hover {{
     overflow-y: auto;
     box-shadow: 0 5px 30px rgba(0,0,0,0.3);
     position: relative;
-}}
+}
 
-.btn {{
+.btn {
     padding: 8px 20px;
     border: none;
     border-radius: 6px;
@@ -169,51 +171,51 @@ a:hover {{
     cursor: pointer;
     font-size: 14px;
     margin-right: 10px;
-}}
+}
 
-.btn:hover {{
+.btn:hover {
     background: #1a5c8a;
-}}
+}
 
-.btn-close {{
+.btn-close {
     background: #999;
-}}
+}
 
 /* 下载模态框进度条 */
-.progress-container {{
+.progress-container {
     margin: 15px 0;
-}}
+}
 
-.progress-bar {{
+.progress-bar {
     width: 100%;
     height: 20px;
     background: #eee;
     border-radius: 10px;
     overflow: hidden;
     margin: 8px 0;
-}}
+}
 
-.progress-fill {{
+.progress-fill {
     height: 100%;
     width: 0%;
     background: linear-gradient(90deg, #4CAF50, #8BC34A);
     transition: width 0.2s;
-}}
+}
 
-.sub-progress {{
+.sub-progress {
     height: 10px;
     margin: 2px 0;
     background: #f0f0f0;
-}}
+}
 
-.sub-fill {{
+.sub-fill {
     height: 100%;
     width: 0%;
     background: #64B5F6;
-}}
+}
 
 /* 文本预览 */
-.text-preview {{
+.text-preview {
     white-space: pre-wrap;
     font-family: monospace;
     background: #f8f8f8;
@@ -222,13 +224,13 @@ a:hover {{
     max-height: 50vh;
     overflow: auto;
     margin-bottom: 50px;
-}}
+}
 
-.text-download-btn {{
+.text-download-btn {
     position: absolute;
     bottom: 20px;
     right: 25px;
-}}
+}
 </style>
 </head>
 
@@ -237,7 +239,7 @@ a:hover {{
 <div class="container">
 
 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-<h1>📁 {full_path}</h1>
+<h1>📁 %%FULL_PATH%%</h1>
 <div style="display:flex; gap:15px; align-items:center;">
   <div class="view-controls">
     <select id="sortSelect">
@@ -253,14 +255,14 @@ a:hover {{
 </div>
 </div>
 
-{info}
+%%INFO%%
 
 <div style="margin: 20px 0;">
 <a href="../">⬆ 上级目录</a>
 </div>
 
 <div id="fileContainer">
-{content}
+%%CONTENT%%
 </div>
 
 <hr>
@@ -301,13 +303,13 @@ a:hover {{
 </div>
 
 <script>
-(function(){{
-    const settings = JSON.parse(localStorage.getItem("siteSettings") || "{{}}");
+(function(){
+    const settings = JSON.parse(localStorage.getItem("siteSettings") || "{}");
 
-    if(settings.bgUrl){{
-        document.body.style.background = `url('${{settings.bgUrl}}') fixed`;
+    if(settings.bgUrl){
+        document.body.style.background = `url('${settings.bgUrl}') fixed`;
         document.body.style.backgroundSize = "cover";
-    }}
+    }
     if(settings.fontColor) document.body.style.color = settings.fontColor;
     if(settings.fontSize) document.body.style.fontSize = settings.fontSize + "px";
     if(settings.linkColor) document.querySelectorAll("a").forEach(a=>a.style.color = settings.linkColor);
@@ -315,26 +317,26 @@ a:hover {{
     if(settings.folderHeight) document.querySelectorAll(".entry").forEach(e=>e.style.minHeight = settings.folderHeight + "px");
     if(settings.folderColor) document.querySelectorAll(".entry").forEach(e=>e.style.background = settings.folderColor);
     if(settings.bgColor) document.body.style.backgroundColor = settings.bgColor;
-    if(settings.bgOpacity) document.querySelector(".container").style.background = `rgba(255,255,255,${{settings.bgOpacity}})`;
-}})();
+    if(settings.bgOpacity) document.querySelector(".container").style.background = `rgba(255,255,255,${settings.bgOpacity})`;
+})();
 </script>
 
 <script>
 // ============ 工具函数 ============
 
-function formatSize(size) {{
-    for (const unit of ['B', 'KB', 'MB', 'GB', 'TB']) {{
-        if (size < 1024.0) return `${{size.toFixed(1)}} ${{unit}}`;
+function formatSize(size) {
+    for (const unit of ['B', 'KB', 'MB', 'GB', 'TB']) {
+        if (size < 1024.0) return `${size.toFixed(1)} ${unit}`;
         size /= 1024.0;
-    }}
-    return `${{size.toFixed(1)}} PB`;
-}}
+    }
+    return `${size.toFixed(1)} PB`;
+}
 
-function formatSpeed(bytesPerSec) {{
+function formatSpeed(bytesPerSec) {
     if (bytesPerSec < 1024) return bytesPerSec.toFixed(1) + ' B/s';
     if (bytesPerSec < 1024*1024) return (bytesPerSec/1024).toFixed(1) + ' KB/s';
     return (bytesPerSec/(1024*1024)).toFixed(1) + ' MB/s';
-}}
+}
 
 // ============ 下载与合并 ============
 
@@ -351,7 +353,6 @@ async function downloadWithProgress(url, onProgress) {
         if (done) break;
         chunks.push(value);
         received += value.length;
-        // 修改：无论 total 是否为 0 都回调
         if (onProgress) onProgress(received, total);
     }
     const buf = new Uint8Array(received);
@@ -363,82 +364,82 @@ async function downloadWithProgress(url, onProgress) {
     return buf.buffer;
 }
 
-async function downloadAllParts(parts, useMulti, concurrency, progressCallbacks) {{
+async function downloadAllParts(parts, useMulti, concurrency, progressCallbacks) {
     const results = new Array(parts.length);
     let active = 0;
     let index = 0;
-    const dlPart = async (i) => {{
+    const dlPart = async (i) => {
         const part = parts[i];
-        const onProg = (loaded, total) => {{
+        const onProg = (loaded, total) => {
             if (progressCallbacks.partProgress) progressCallbacks.partProgress(i, loaded, total);
-        }};
+        };
         const data = await downloadWithProgress(part.name, onProg);
         results[i] = data;
         if (progressCallbacks.partComplete) progressCallbacks.partComplete(i);
-    }};
-    return new Promise((resolve, reject) => {{
-        const next = () => {{
-            while (active < concurrency && index < parts.length) {{
+    };
+    return new Promise((resolve, reject) => {
+        const next = () => {
+            while (active < concurrency && index < parts.length) {
                 const i = index++;
                 active++;
-                dlPart(i).then(() => {{ active--; next(); }}).catch(reject);
-            }}
+                dlPart(i).then(() => { active--; next(); }).catch(reject);
+            }
             if (active === 0 && index === parts.length) resolve(results);
-        }};
+        };
         next();
-    }});
-}}
+    });
+}
 
-async function mergePartsToBlob(partsInfo, useMulti = true, onProgress, onPartProgress) {{
+async function mergePartsToBlob(partsInfo, useMulti = true, onProgress, onPartProgress) {
     const totalSize = partsInfo.reduce((s, p) => s + p.size, 0);
     const partTotals = partsInfo.map(p => p.size);
     const partLoaded = new Array(partsInfo.length).fill(0);
     let downloaded = 0;
-    
-    const progressCallbacks = {{
-        partProgress: (i, loaded, total) => {{
+
+    const progressCallbacks = {
+        partProgress: (i, loaded, total) => {
             const delta = loaded - partLoaded[i];
-            if (delta > 0) {{
+            if (delta > 0) {
                 downloaded += delta;
                 partLoaded[i] = loaded;
                 if (onProgress) onProgress(downloaded, totalSize);
-            }}
+            }
             if (onPartProgress) onPartProgress(i, loaded, total);
-        }},
-        partComplete: (i) => {{
+        },
+        partComplete: (i) => {
             const remaining = partTotals[i] - partLoaded[i];
-            if (remaining > 0) {{
+            if (remaining > 0) {
                 downloaded += remaining;
                 partLoaded[i] = partTotals[i];
                 if (onProgress) onProgress(downloaded, totalSize);
-            }}
+            }
             if (onPartProgress) onPartProgress(i, partTotals[i], partTotals[i]);
-        }}
-    }};
-    
+        }
+    };
+
     // 从设置中读取下载线程数
     let concurrency = 1;
-    if (useMulti) {{
-        const settings = JSON.parse(localStorage.getItem("siteSettings") || "{{}}");
+    if (useMulti) {
+        const settings = JSON.parse(localStorage.getItem("siteSettings") || "{}");
         concurrency = parseInt(settings.downloadThreads, 10) || 6;
-    }}
+    }
     const results = await downloadAllParts(partsInfo, useMulti, concurrency, progressCallbacks);
     const totalLength = results.reduce((sum, buf) => sum + buf.byteLength, 0);
     const merged = new Uint8Array(totalLength);
     let offset = 0;
-    for (const buf of results) {{
+    for (const buf of results) {
         merged.set(new Uint8Array(buf), offset);
         offset += buf.byteLength;
-    }}
+    }
     return new Blob([merged]);
-}}
+}
 
-async function downloadFileAsBlob(url, onProgress) {{
+async function downloadFileAsBlob(url, onProgress) {
     const buf = await downloadWithProgress(url, onProgress);
     return new Blob([buf]);
-}}
+}
 
-function saveBlob(blob, filename) {{
+function saveBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -447,17 +448,17 @@ function saveBlob(blob, filename) {{
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-}}
+}
 
 // 直接下载（浏览器默认下载，无模态框）
-function downloadFileDirectly(name, url) {{
+function downloadFileDirectly(name, url) {
     const a = document.createElement('a');
     a.href = url;
     a.download = name;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-}}
+}
 
 // ============ 预览与下载分发 ============
 
@@ -467,13 +468,13 @@ const prevContent = document.getElementById('prevContent');
 const errorModal = document.getElementById('errorModal');
 const errorMsg = document.getElementById('errorMsg');
 
-function showError(msg) {{
+function showError(msg) {
     errorMsg.textContent = msg;
     errorModal.style.display = 'block';
-}}
+}
 
 // 下载窗格（仅用于分片文件）
-async function startDownloadFlow(entryEl) {{
+async function startDownloadFlow(entryEl) {
     const name = entryEl.dataset.name;
     const parts = entryEl.dataset.parts ? JSON.parse(entryEl.dataset.parts) : null;
     const size = parseInt(entryEl.dataset.size);
@@ -486,14 +487,14 @@ async function startDownloadFlow(entryEl) {{
     document.getElementById('dlFileName').textContent = '📥 下载: ' + name;
     document.getElementById('dlFileSize').textContent = '总大小: ' + formatSize(size) + ' (' + parts.length + ' 个分片)';
     document.getElementById('dlMultiThread').checked = true;
-    document.getElementById('dlMultiThread').parentElement.style.display = ''; // 显示多线程复选框
+    document.getElementById('dlMultiThread').parentElement.style.display = '';
     progressArea.innerHTML = '';
     startBtn.disabled = false;
     closeBtn.disabled = false;
 
     const newStart = startBtn.cloneNode(true);
     startBtn.parentNode.replaceChild(newStart, startBtn);
-    newStart.addEventListener('click', async () => {{
+    newStart.addEventListener('click', async () => {
         const useMulti = document.getElementById('dlMultiThread').checked;
         newStart.disabled = true;
         closeBtn.disabled = true;
@@ -518,64 +519,64 @@ async function startDownloadFlow(entryEl) {{
         progressArea.appendChild(speedSpan);
 
         let subBars = [];
-        if (useMulti) {{
+        if (useMulti) {
             const subContainer = document.createElement('div');
-            parts.forEach((p, i) => {{
+            parts.forEach((p, i) => {
                 const bar = document.createElement('div');
                 bar.className = 'progress-bar sub-progress';
-                bar.innerHTML = `<div class="progress-fill sub-fill" id="subFill${{i}}" style="width:0%"></div>`;
+                bar.innerHTML = `<div class="progress-fill sub-fill" id="subFill${i}" style="width:0%"></div>`;
                 subContainer.appendChild(bar);
-            }});
+            });
             progressArea.appendChild(subContainer);
-            subBars = parts.map((_, i) => document.getElementById(`subFill${{i}}`));
-        }}
+            subBars = parts.map((_, i) => document.getElementById(`subFill${i}`));
+        }
 
         let lastTime = Date.now();
         let lastLoaded = 0;
-        const maxSpeed = 10 * 1024 * 1024; // 10 MB/s 颜色阈值
+        const maxSpeed = 10 * 1024 * 1024;
 
-        try {{
-            const blob = await mergePartsToBlob(parts, useMulti, 
-                (loaded, total) => {{
+        try {
+            const blob = await mergePartsToBlob(parts, useMulti,
+                (loaded, total) => {
                     const percent = (loaded / total * 100).toFixed(1);
                     mainFill.style.width = percent + '%';
                     percentSpan.textContent = percent + '%';
-                    
+
                     const now = Date.now();
                     const elapsed = (now - lastTime) / 1000;
-                    if (elapsed > 0.3) {{  // 避免更新过快
+                    if (elapsed > 0.3) {
                         const speed = (loaded - lastLoaded) / elapsed;
                         speedSpan.textContent = formatSpeed(speed);
                         const ratio = Math.min(speed / maxSpeed, 1);
                         const red = 255;
                         const green = Math.round(255 * (1 - ratio));
                         const blue = Math.round(255 * (1 - ratio));
-                        speedSpan.style.color = `rgb(${{red}},${{green}},${{blue}})`;
+                        speedSpan.style.color = `rgb(${red},${green},${blue})`;
                         speedSpan.style.fontWeight = speed > maxSpeed ? 'bold' : 'normal';
                         lastTime = now;
                         lastLoaded = loaded;
-                    }}
-                }},
-                (i, loaded, total) => {{
-                    if (useMulti && subBars[i]) {{
+                    }
+                },
+                (i, loaded, total) => {
+                    if (useMulti && subBars[i]) {
                         subBars[i].style.width = (loaded / total * 100) + '%';
-                    }}
-                }}
+                    }
+                }
             );
             if (useMulti) subBars.forEach(b => b.style.width = '100%');
             saveBlob(blob, name);
             modal.style.display = 'none';
-        }} catch (err) {{
+        } catch (err) {
             showError('下载失败: ' + err.message);
-        }} finally {{
+        } finally {
             newStart.disabled = false;
             closeBtn.disabled = false;
-        }}
-    }});
+        }
+    });
 
     closeBtn.onclick = () => modal.style.display = 'none';
     modal.style.display = 'block';
-}}
+}
 
 // 链接文件下载流程（多线程 URL 分片下载）
 async function startUrlDownloadFlow(name, url, threads) {
@@ -589,16 +590,14 @@ async function startUrlDownloadFlow(name, url, threads) {
 
     document.getElementById('dlFileName').textContent = '📥 下载: ' + name;
     sizeEl.textContent = '正在获取文件大小...';
-    multiThreadLabel.style.display = 'none'; // 隐藏多线程复选框（线程数由 .link 指定）
+    multiThreadLabel.style.display = 'none';
     progressArea.innerHTML = '';
-    startBtn.disabled = true;  // 获取大小前禁用
+    startBtn.disabled = true;
     closeBtn.disabled = false;
 
-    // 克隆按钮，清除旧监听器
     const newStart = startBtn.cloneNode(true);
     startBtn.parentNode.replaceChild(newStart, startBtn);
 
-    // 先显示模态框，让用户看到反馈
     modal.style.display = 'block';
 
     // ---------- 立即获取文件大小 ----------
@@ -607,7 +606,6 @@ async function startUrlDownloadFlow(name, url, threads) {
 
     console.log('[link] 开始获取文件大小:', url);
 
-    // 尝试 1：HEAD
     try {
         const headResp = await fetch(url, { method: 'HEAD', mode: 'cors' });
         console.log('[link] HEAD 状态:', headResp.status);
@@ -621,7 +619,6 @@ async function startUrlDownloadFlow(name, url, threads) {
         sizeError = e;
     }
 
-    // 尝试 2：Range GET
     if (!totalSize) {
         try {
             const rangeResp = await fetch(url, {
@@ -644,7 +641,6 @@ async function startUrlDownloadFlow(name, url, threads) {
         }
     }
 
-    // 更新 UI
     if (totalSize > 0) {
         sizeEl.textContent = `总大小: ${formatSize(totalSize)} (${threads} 线程)`;
         newStart.disabled = false;
@@ -654,7 +650,6 @@ async function startUrlDownloadFlow(name, url, threads) {
         console.warn('[link] 无法获取大小，将回退单线程');
         newStart.disabled = false;
     }
-    // ---------- 获取结束 ----------
 
     newStart.addEventListener('click', async () => {
         newStart.disabled = true;
@@ -682,7 +677,6 @@ async function startUrlDownloadFlow(name, url, threads) {
         const maxSpeed = 10 * 1024 * 1024;
 
         try {
-            // 无法获取大小：回退单线程流式下载
             if (!totalSize) {
                 console.log('[link] 单线程回退下载');
                 const blob = await downloadFileAsBlob(url, (loaded, total) => {
@@ -707,7 +701,6 @@ async function startUrlDownloadFlow(name, url, threads) {
                 return;
             }
 
-            // 计算分片
             const partSize = Math.ceil(totalSize / threads);
             const parts = [];
             for (let i = 0; i < threads; i++) {
@@ -718,7 +711,6 @@ async function startUrlDownloadFlow(name, url, threads) {
             }
             console.log('[link] 分片:', parts);
 
-            // 分片进度条
             const subContainer = document.createElement('div');
             parts.forEach((p, i) => {
                 const bar = document.createElement('div');
@@ -765,8 +757,9 @@ async function startUrlDownloadFlow(name, url, threads) {
 
     closeBtn.onclick = () => modal.style.display = 'none';
 }
+
 // 新增：URL 分片下载核心逻辑
-async function downloadUrlInParts(url, parts, totalSize, onProgress, onPartProgress) {{
+async function downloadUrlInParts(url, parts, totalSize, onProgress, onPartProgress) {
     const results = new Array(parts.length);
     let active = 0;
     let index = 0;
@@ -774,66 +767,66 @@ async function downloadUrlInParts(url, parts, totalSize, onProgress, onPartProgr
     const partLoaded = new Array(parts.length).fill(0);
     const partTotals = parts.map(p => p.end - p.start + 1);
 
-    const dlPart = async (i) => {{
-        const {{ start, end }} = parts[i];
-        const resp = await fetch(url, {{ headers: {{ 'Range': `bytes=${{start}}-${{end}}` }} }});
-        if (!resp.ok && resp.status !== 206) throw new Error(`HTTP ${{resp.status}}`);
+    const dlPart = async (i) => {
+        const { start, end } = parts[i];
+        const resp = await fetch(url, { headers: { 'Range': `bytes=${start}-${end}` } });
+        if (!resp.ok && resp.status !== 206) throw new Error(`HTTP ${resp.status}`);
         const reader = resp.body.getReader();
         const chunks = [];
         let received = 0;
-        while (true) {{
-            const {{ done, value }} = await reader.read();
+        while (true) {
+            const { done, value } = await reader.read();
             if (done) break;
             chunks.push(value);
             received += value.length;
             const delta = received - partLoaded[i];
-            if (delta > 0) {{
+            if (delta > 0) {
                 downloaded += delta;
                 partLoaded[i] = received;
                 if (onProgress) onProgress(downloaded, totalSize);
-            }}
+            }
             if (onPartProgress) onPartProgress(i, received, partTotals[i]);
-        }}
+        }
         const buf = new Uint8Array(received);
         let pos = 0;
-        for (const chunk of chunks) {{
+        for (const chunk of chunks) {
             buf.set(chunk, pos);
             pos += chunk.length;
-        }}
+        }
         results[i] = buf.buffer;
         const remaining = partTotals[i] - partLoaded[i];
-        if (remaining > 0) {{
+        if (remaining > 0) {
             downloaded += remaining;
             partLoaded[i] = partTotals[i];
             if (onProgress) onProgress(downloaded, totalSize);
-        }}
+        }
         if (onPartProgress) onPartProgress(i, partTotals[i], partTotals[i]);
-    }};
+    };
 
-    return new Promise((resolve, reject) => {{
-        const next = () => {{
-            while (active < parts.length && index < parts.length) {{
+    return new Promise((resolve, reject) => {
+        const next = () => {
+            while (active < parts.length && index < parts.length) {
                 const i = index++;
                 active++;
-                dlPart(i).then(() => {{ active--; next(); }}).catch(reject);
-            }}
-            if (active === 0 && index === parts.length) {{
+                dlPart(i).then(() => { active--; next(); }).catch(reject);
+            }
+            if (active === 0 && index === parts.length) {
                 const totalLength = results.reduce((sum, buf) => sum + buf.byteLength, 0);
                 const merged = new Uint8Array(totalLength);
                 let offset = 0;
-                for (const buf of results) {{
+                for (const buf of results) {
                     merged.set(new Uint8Array(buf), offset);
                     offset += buf.byteLength;
-                }}
+                }
                 resolve(new Blob([merged]));
-            }}
-        }};
+            }
+        };
         next();
-    }});
-}}
+    });
+}
 
 // 图片预览
-async function previewImage(entryEl) {{
+async function previewImage(entryEl) {
     const name = entryEl.dataset.name;
     const url = entryEl.dataset.url;
     const parts = entryEl.dataset.parts ? JSON.parse(entryEl.dataset.parts) : null;
@@ -841,24 +834,24 @@ async function previewImage(entryEl) {{
     prevContent.innerHTML = '<div style="text-align:center">加载中...</div>';
     previewModal.style.display = 'block';
 
-    try {{
+    try {
         let imgSrc;
-        if (parts) {{
+        if (parts) {
             const blob = await mergePartsToBlob(parts, true);
             imgSrc = URL.createObjectURL(blob);
             const release = () => URL.revokeObjectURL(imgSrc);
-            previewModal.addEventListener('close', release, {{once: true}});
-        }} else {{
+            previewModal.addEventListener('close', release, {once: true});
+        } else {
             imgSrc = url;
-        }}
-        prevContent.innerHTML = `<img src="${{imgSrc}}" alt="${{name}}" style="max-width:100%;max-height:70vh;display:block;margin:0 auto;">`;
-    }} catch (err) {{
-        prevContent.innerHTML = `<p style="color:red">加载失败: ${{err.message}}</p>`;
-    }}
-}}
+        }
+        prevContent.innerHTML = `<img src="${imgSrc}" alt="${name}" style="max-width:100%;max-height:70vh;display:block;margin:0 auto;">`;
+    } catch (err) {
+        prevContent.innerHTML = `<p style="color:red">加载失败: ${err.message}</p>`;
+    }
+}
 
 // 文本预览
-async function previewText(entryEl) {{
+async function previewText(entryEl) {
     const name = entryEl.dataset.name;
     const url = entryEl.dataset.url;
     const parts = entryEl.dataset.parts ? JSON.parse(entryEl.dataset.parts) : null;
@@ -866,30 +859,30 @@ async function previewText(entryEl) {{
     prevContent.innerHTML = '<div style="text-align:center">加载中...</div>';
     previewModal.style.display = 'block';
 
-    try {{
+    try {
         let text, blob;
-        if (parts) {{
+        if (parts) {
             blob = await mergePartsToBlob(parts, true);
             text = await blob.text();
-        }} else {{
+        } else {
             const resp = await fetch(url);
             blob = await resp.blob();
             text = await blob.text();
-        }}
+        }
         prevContent.innerHTML = `
-            <div class="text-preview">${{text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}}</div>
+            <div class="text-preview">${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
             <button id="textDownloadBtn" class="btn text-download-btn">⬇ 下载</button>
         `;
-        document.getElementById('textDownloadBtn').onclick = () => {{
+        document.getElementById('textDownloadBtn').onclick = () => {
             saveBlob(blob, name);
-        }};
-    }} catch (err) {{
-        prevContent.innerHTML = `<p style="color:red">加载失败: ${{err.message}}</p>`;
-    }}
-}}
+        };
+    } catch (err) {
+        prevContent.innerHTML = `<p style="color:red">加载失败: ${err.message}</p>`;
+    }
+}
 
 // 音视频预览
-async function previewMedia(entryEl) {{
+async function previewMedia(entryEl) {
     const name = entryEl.dataset.name;
     const url = entryEl.dataset.url;
     const parts = entryEl.dataset.parts ? JSON.parse(entryEl.dataset.parts) : null;
@@ -899,65 +892,61 @@ async function previewMedia(entryEl) {{
     prevContent.innerHTML = '<div style="text-align:center">加载中...</div>';
     previewModal.style.display = 'block';
 
-    try {{
+    try {
         let blobUrl;
-        if (parts) {{
+        if (parts) {
             const blob = await mergePartsToBlob(parts, true);
             blobUrl = URL.createObjectURL(blob);
             const release = () => URL.revokeObjectURL(blobUrl);
-            previewModal.addEventListener('close', release, {{once: true}});
-        }} else {{
+            previewModal.addEventListener('close', release, {once: true});
+        } else {
             blobUrl = url;
-        }}
+        }
 
-        if (type === 'video') {{
-            prevContent.innerHTML = `<video controls autoplay style="max-width:100%;max-height:60vh;" src="${{blobUrl}}"></video>`;
-        }} else {{
-            prevContent.innerHTML = `<audio controls autoplay style="width:100%;" src="${{blobUrl}}"></audio>`;
-        }}
-    }} catch (err) {{
-        prevContent.innerHTML = `<p style="color:red">加载失败: ${{err.message}}</p>`;
-    }}
-}}
+        if (type === 'video') {
+            prevContent.innerHTML = `<video controls autoplay style="max-width:100%;max-height:60vh;" src="${blobUrl}"></video>`;
+        } else {
+            prevContent.innerHTML = `<audio controls autoplay style="width:100%;" src="${blobUrl}"></audio>`;
+        }
+    } catch (err) {
+        prevContent.innerHTML = `<p style="color:red">加载失败: ${err.message}</p>`;
+    }
+}
 
 // 文件条目点击入口
-function handleFileClick(entryEl) {{
+function handleFileClick(entryEl) {
     const type = entryEl.dataset.type;
     const size = parseInt(entryEl.dataset.size);
     const name = entryEl.dataset.name;
     const url = entryEl.dataset.url;
     const parts = entryEl.dataset.parts ? JSON.parse(entryEl.dataset.parts) : null;
 
-    // 链接文件处理
-    if (type === 'link') {{
+    if (type === 'link') {
         const redirect = entryEl.dataset.redirect === 'true';
         const threads = parseInt(entryEl.dataset.threads) || 6;
-        if (redirect) {{
+        if (redirect) {
             window.open(url, '_blank');
-        }} else {{
+        } else {
             startUrlDownloadFlow(name, url, threads);
-        }}
+        }
         return;
-    }}
+    }
 
-    // 分片文件：必须弹窗下载
-    if (parts && parts.length > 0) {{
+    if (parts && parts.length > 0) {
         startDownloadFlow(entryEl);
         return;
-    }}
+    }
 
-    // 普通文件：根据类型处理
-    if (type === 'video' || type === 'audio') {{
+    if (type === 'video' || type === 'audio') {
         previewMedia(entryEl);
-    }} else if (type === 'image') {{
+    } else if (type === 'image') {
         previewImage(entryEl);
-    }} else if (type === 'text' && size < 1048576) {{
+    } else if (type === 'text' && size < 1048576) {
         previewText(entryEl);
-    }} else {{
-        // 其它所有无法预览的文件直接交给浏览器处理（导航到链接）
+    } else {
         window.location.href = url;
-    }}
-}}
+    }
+}
 
 // ============ 排序与视图 ============
 
@@ -965,119 +954,118 @@ const fileContainer = document.getElementById('fileContainer');
 let currentSort = 'name-asc';
 let currentView = 'list';
 
-function applySort() {{
+function applySort() {
     const entries = [...fileContainer.querySelectorAll('.file-entry')];
     const [key, order] = currentSort.split('-');
-    entries.sort((a, b) => {{
+    entries.sort((a, b) => {
         let valA, valB;
-        if (key === 'name') {{
+        if (key === 'name') {
             valA = a.dataset.name.toLowerCase();
             valB = b.dataset.name.toLowerCase();
-        }} else {{
+        } else {
             valA = parseInt(a.dataset.size);
             valB = parseInt(b.dataset.size);
-        }}
+        }
         if (valA < valB) return order === 'asc' ? -1 : 1;
         if (valA > valB) return order === 'asc' ? 1 : -1;
         return 0;
-    }});
+    });
     entries.forEach(e => fileContainer.appendChild(e));
-}}
+}
 
-function applyView() {{
+function applyView() {
     fileContainer.classList.toggle('icon-view', currentView === 'icon');
     document.getElementById('listViewBtn').classList.toggle('active', currentView === 'list');
     document.getElementById('iconViewBtn').classList.toggle('active', currentView === 'icon');
 
-    if (currentView === 'icon') {{
-        fileContainer.querySelectorAll('.file-entry').forEach(entry => {{
+    if (currentView === 'icon') {
+        fileContainer.querySelectorAll('.file-entry').forEach(entry => {
             const iconDiv = entry.querySelector('.entry-icon');
             if (!iconDiv) return;
             const thumb = entry.dataset.thumb;
-            if (thumb) {{
-                if (!iconDiv.querySelector('img[data-thumb]')) {{
-                    iconDiv.innerHTML = `<img data-thumb src="${{thumb}}" alt="${{entry.dataset.name}}" style="max-width:100%;max-height:120px;object-fit:contain;">`;
-                }}
-            }}
-        }});
-    }}
-}}
+            if (thumb) {
+                if (!iconDiv.querySelector('img[data-thumb]')) {
+                    iconDiv.innerHTML = `<img data-thumb src="${thumb}" alt="${entry.dataset.name}" style="max-width:100%;max-height:120px;object-fit:contain;">`;
+                }
+            }
+        });
+    }
+}
 
-function saveViewSettings() {{
-    localStorage.setItem('fileViewSettings', JSON.stringify({{
+function saveViewSettings() {
+    localStorage.setItem('fileViewSettings', JSON.stringify({
         sort: currentSort,
         view: currentView
-    }}));
-}}
+    }));
+}
 
-// 绑定控件事件
-document.getElementById('sortSelect').addEventListener('change', function() {{
+document.getElementById('sortSelect').addEventListener('change', function() {
     currentSort = this.value;
     applySort();
     saveViewSettings();
-}});
-document.getElementById('listViewBtn').addEventListener('click', () => {{
+});
+document.getElementById('listViewBtn').addEventListener('click', () => {
     currentView = 'list';
     applyView();
     saveViewSettings();
-}});
-document.getElementById('iconViewBtn').addEventListener('click', () => {{
+});
+document.getElementById('iconViewBtn').addEventListener('click', () => {
     currentView = 'icon';
     applyView();
     saveViewSettings();
-}});
+});
 
 // 初始化
-document.addEventListener('DOMContentLoaded', () => {{
-    const saved = JSON.parse(localStorage.getItem('fileViewSettings') || '{{}}');
-    if (saved.sort) {{
+document.addEventListener('DOMContentLoaded', () => {
+    const saved = JSON.parse(localStorage.getItem('fileViewSettings') || '{}');
+    if (saved.sort) {
         currentSort = saved.sort;
         document.getElementById('sortSelect').value = currentSort;
-    }}
-    if (saved.view) {{
+    }
+    if (saved.view) {
         currentView = saved.view;
         applyView();
-    }}
+    }
     applySort();
 
-    fileContainer.addEventListener('click', (e) => {{
+    fileContainer.addEventListener('click', (e) => {
         const entry = e.target.closest('.file-entry');
         if (entry) handleFileClick(entry);
-    }});
+    });
 
-    document.getElementById('prevCloseBtn').onclick = () => {{
+    document.getElementById('prevCloseBtn').onclick = () => {
         previewModal.style.display = 'none';
         previewModal.dispatchEvent(new Event('close'));
-    }};
+    };
     document.getElementById('errorCloseBtn').onclick = () => errorModal.style.display = 'none';
-    window.onclick = (event) => {{
-        if (event.target == previewModal) {{
+    window.onclick = (event) => {
+        if (event.target == previewModal) {
             previewModal.style.display = 'none';
             previewModal.dispatchEvent(new Event('close'));
-        }}
+        }
         if (event.target == errorModal) errorModal.style.display = 'none';
         if (event.target == document.getElementById('downloadModal')) document.getElementById('downloadModal').style.display = 'none';
-    }};
+    };
 
-    // 处理 ?target= 参数
     const params = new URLSearchParams(window.location.search);
     const target = params.get('target');
-    if (target) {{
+    if (target) {
         const found = [...fileContainer.querySelectorAll('.file-entry')].find(e => e.dataset.name === target);
-        if (found) {{
+        if (found) {
             handleFileClick(found);
-        }} else {{
+        } else {
             showError('文件不存在：' + target);
-        }}
-    }}
-}});
+        }
+    }
+});
 </script>
 </body>
 </html>
 """
 
 # =========================
-# 条目模板（用于生成HTML片段）
+# 条目模板（用于生成 HTML 片段）
+# 注意：这两段用 .format()，因为里面没有 JS，{} 都是纯占位符
 # =========================
 
 dir_template = """
@@ -1149,15 +1137,12 @@ def classify_file(name):
 
 
 def generate_thumbnail(file_path, thumb_name="thumb.jpg", size=(200, 200)):
-    """
-    生成缩略图并保存到同目录下。返回缩略图文件名（相对路径），失败返回 None。
-    """
+    """生成缩略图并保存到同目录下。返回缩略图文件名，失败返回 None。"""
     try:
         img = Image.open(file_path)
         img.thumbnail(size)
         thumb_dir = os.path.dirname(file_path)
         thumb_path = os.path.join(thumb_dir, thumb_name)
-        # 统一转为JPEG格式（RGBA转RGB）
         if img.mode in ('RGBA', 'LA', 'P'):
             img = img.convert('RGBA')
             background = Image.new('RGBA', img.size, (255, 255, 255, 255))
@@ -1278,10 +1263,8 @@ def generate_index_html(root_dir):
                 parts_attr=f'data-parts=\'{parts_json}\''
             )
 
-      
-        
-        # 生成 .link 文件条目（替换原来的这一段）
         # 生成 .link 文件条目
+        # ★ 修复：extra_attrs 的闭合括号与 content += ... 全部缩进到 for 循环内
         link_files = [f for f in files if f.endswith('.link')]
         for link_file in sorted(link_files):
             link_path = os.path.join(root, link_file)
@@ -1317,13 +1300,12 @@ def generate_index_html(root_dir):
             if file_name in all_part_files:
                 continue
             if file_name.endswith('.link'):
-                continue  # 已处理
+                continue
             file_path = os.path.join(root, file_name)
             file_size = os.path.getsize(file_path)
             icon = get_file_icon(file_name)
             ftype = classify_file(file_name)
 
-            # 构建缩略图（仅图片文件）
             thumb_url = ""
             if ftype == 'image':
                 thumb_filename = file_name + ".thumb.jpg"
@@ -1375,10 +1357,12 @@ def generate_index_html(root_dir):
                 info_html = markdown.markdown(f.read())
                 info_placeholder = f"<div>{info_html}</div>"
 
-        index_content = template.format(
-            full_path=full_path,
-            content=content,
-            info=info_placeholder
+        # ★ 核心修复：使用 replace 代替 format，避免花括号冲突
+        index_content = (
+            template
+            .replace('%%FULL_PATH%%', full_path)
+            .replace('%%INFO%%', info_placeholder)
+            .replace('%%CONTENT%%', content)
         )
 
         with open(os.path.join(root, 'index.html'), 'w', encoding='utf-8') as f:
