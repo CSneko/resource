@@ -5,6 +5,7 @@ import markdown
 import shutil
 import re
 from PIL import Image
+import html
 
 # =========================
 # HTML 模板（已修改 JavaScript）
@@ -337,29 +338,30 @@ function formatSpeed(bytesPerSec) {{
 
 // ============ 下载与合并 ============
 
-async function downloadWithProgress(url, onProgress) {{
+async function downloadWithProgress(url, onProgress) {
     const response = await fetch(url);
-    if (!response.ok) throw new Error(`HTTP ${{response.status}}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const contentLength = response.headers.get('Content-Length');
     const total = contentLength ? parseInt(contentLength, 10) : 0;
     const reader = response.body.getReader();
     const chunks = [];
     let received = 0;
-    while (true) {{
-        const {{ done, value }} = await reader.read();
+    while (true) {
+        const { done, value } = await reader.read();
         if (done) break;
         chunks.push(value);
         received += value.length;
-        if (onProgress && total > 0) onProgress(received, total);
-    }}
+        // 修改：无论 total 是否为 0 都回调
+        if (onProgress) onProgress(received, total);
+    }
     const buf = new Uint8Array(received);
     let pos = 0;
-    for (const chunk of chunks) {{
+    for (const chunk of chunks) {
         buf.set(chunk, pos);
         pos += chunk.length;
-    }}
+    }
     return buf.buffer;
-}}
+}
 
 async function downloadAllParts(parts, useMulti, concurrency, progressCallbacks) {{
     const results = new Array(parts.length);
@@ -575,29 +577,90 @@ async function startDownloadFlow(entryEl) {{
     modal.style.display = 'block';
 }}
 
-// 新增：链接文件下载流程（多线程 URL 分片下载）
-async function startUrlDownloadFlow(name, url, threads) {{
+// 链接文件下载流程（多线程 URL 分片下载）
+async function startUrlDownloadFlow(name, url, threads) {
     const modal = document.getElementById('downloadModal');
     const progressArea = document.getElementById('dlProgressArea');
     const startBtn = document.getElementById('dlStartBtn');
     const closeBtn = document.getElementById('dlCloseBtn');
     const multiThreadCheckbox = document.getElementById('dlMultiThread');
     const multiThreadLabel = multiThreadCheckbox.parentElement;
+    const sizeEl = document.getElementById('dlFileSize');
 
     document.getElementById('dlFileName').textContent = '📥 下载: ' + name;
-    document.getElementById('dlFileSize').textContent = '正在获取文件大小...';
-    multiThreadLabel.style.display = 'none'; // 隐藏多线程复选框（线程数已由 .link 指定）
+    sizeEl.textContent = '正在获取文件大小...';
+    multiThreadLabel.style.display = 'none'; // 隐藏多线程复选框（线程数由 .link 指定）
     progressArea.innerHTML = '';
-    startBtn.disabled = false;
+    startBtn.disabled = true;  // 获取大小前禁用
     closeBtn.disabled = false;
 
+    // 克隆按钮，清除旧监听器
     const newStart = startBtn.cloneNode(true);
     startBtn.parentNode.replaceChild(newStart, startBtn);
 
-    newStart.addEventListener('click', async () => {{
+    // 先显示模态框，让用户看到反馈
+    modal.style.display = 'block';
+
+    // ---------- 立即获取文件大小 ----------
+    let totalSize = 0;
+    let sizeError = null;
+
+    console.log('[link] 开始获取文件大小:', url);
+
+    // 尝试 1：HEAD
+    try {
+        const headResp = await fetch(url, { method: 'HEAD', mode: 'cors' });
+        console.log('[link] HEAD 状态:', headResp.status);
+        if (headResp.ok) {
+            const cl = headResp.headers.get('Content-Length');
+            console.log('[link] HEAD Content-Length:', cl);
+            if (cl) totalSize = parseInt(cl, 10);
+        }
+    } catch (e) {
+        console.warn('[link] HEAD 请求失败:', e);
+        sizeError = e;
+    }
+
+    // 尝试 2：Range GET
+    if (!totalSize) {
+        try {
+            const rangeResp = await fetch(url, {
+                method: 'GET',
+                headers: { 'Range': 'bytes=0-0' },
+                mode: 'cors'
+            });
+            console.log('[link] Range 状态:', rangeResp.status);
+            const contentRange = rangeResp.headers.get('Content-Range');
+            console.log('[link] Content-Range:', contentRange);
+            if (contentRange) {
+                totalSize = parseInt(contentRange.split('/')[1], 10);
+            } else {
+                const cl = rangeResp.headers.get('Content-Length');
+                if (cl) totalSize = parseInt(cl, 10);
+            }
+        } catch (e) {
+            console.warn('[link] Range 请求失败:', e);
+            if (!sizeError) sizeError = e;
+        }
+    }
+
+    // 更新 UI
+    if (totalSize > 0) {
+        sizeEl.textContent = `总大小: ${formatSize(totalSize)} (${threads} 线程)`;
+        newStart.disabled = false;
+    } else {
+        const errMsg = sizeError ? ` (${sizeError.message})` : '';
+        sizeEl.textContent = `⚠️ 无法获取文件大小${errMsg}，将尝试单线程下载`;
+        console.warn('[link] 无法获取大小，将回退单线程');
+        newStart.disabled = false;
+    }
+    // ---------- 获取结束 ----------
+
+    newStart.addEventListener('click', async () => {
         newStart.disabled = true;
         closeBtn.disabled = true;
         progressArea.innerHTML = '';
+
         const mainBar = document.createElement('div');
         mainBar.className = 'progress-bar';
         mainBar.innerHTML = '<div class="progress-fill" id="mainFill" style="width:0%"></div>';
@@ -618,94 +681,90 @@ async function startUrlDownloadFlow(name, url, threads) {{
         let lastLoaded = 0;
         const maxSpeed = 10 * 1024 * 1024;
 
-        try {{
-            // 获取文件总大小
-            let totalSize = 0;
-            try {{
-                const headResp = await fetch(url, {{ method: 'HEAD' }});
-                if (headResp.ok) {{
-                    totalSize = parseInt(headResp.headers.get('Content-Length'), 10);
-                }}
-            }} catch (e) {{}}
-            if (!totalSize) {{
-                const rangeResp = await fetch(url, {{ headers: {{ 'Range': 'bytes=0-0' }} }});
-                const contentRange = rangeResp.headers.get('Content-Range');
-                if (contentRange) {{
-                    totalSize = parseInt(contentRange.split('/')[1], 10);
-                }}
-            }}
-            if (!totalSize) {{
-                // 无法获取大小，回退单线程下载
-                const blob = await downloadFileAsBlob(url, (loaded, total) => {{
-                    const percent = total > 0 ? (loaded / total * 100).toFixed(1) : '?';
-                    mainFill.style.width = (total > 0 ? percent : 0) + '%';
-                    percentSpan.textContent = percent + '%';
-                }});
+        try {
+            // 无法获取大小：回退单线程流式下载
+            if (!totalSize) {
+                console.log('[link] 单线程回退下载');
+                const blob = await downloadFileAsBlob(url, (loaded, total) => {
+                    if (total > 0) {
+                        const percent = (loaded / total * 100).toFixed(1);
+                        mainFill.style.width = percent + '%';
+                        percentSpan.textContent = percent + '%';
+                    } else {
+                        percentSpan.textContent = formatSize(loaded);
+                    }
+                    const now = Date.now();
+                    const elapsed = (now - lastTime) / 1000;
+                    if (elapsed > 0.3) {
+                        const speed = (loaded - lastLoaded) / elapsed;
+                        speedSpan.textContent = formatSpeed(speed);
+                        lastTime = now;
+                        lastLoaded = loaded;
+                    }
+                });
                 saveBlob(blob, name);
                 modal.style.display = 'none';
                 return;
-            }}
+            }
 
-            document.getElementById('dlFileSize').textContent = '总大小: ' + formatSize(totalSize);
-
-            // 根据 threads 划分分片
+            // 计算分片
             const partSize = Math.ceil(totalSize / threads);
             const parts = [];
-            for (let i = 0; i < threads; i++) {{
+            for (let i = 0; i < threads; i++) {
                 const start = i * partSize;
                 const end = Math.min(start + partSize - 1, totalSize - 1);
                 if (start > end) break;
-                parts.push({{ start, end }});
-            }}
+                parts.push({ start, end });
+            }
+            console.log('[link] 分片:', parts);
 
-            // 创建分片进度条
+            // 分片进度条
             const subContainer = document.createElement('div');
-            parts.forEach((p, i) => {{
+            parts.forEach((p, i) => {
                 const bar = document.createElement('div');
                 bar.className = 'progress-bar sub-progress';
-                bar.innerHTML = `<div class="progress-fill sub-fill" id="subFill${{i}}" style="width:0%"></div>`;
+                bar.innerHTML = `<div class="progress-fill sub-fill" id="subFill${i}" style="width:0%"></div>`;
                 subContainer.appendChild(bar);
-            }});
+            });
             progressArea.appendChild(subContainer);
-            const subBars = parts.map((_, i) => document.getElementById(`subFill${{i}}`));
+            const subBars = parts.map((_, i) => document.getElementById(`subFill${i}`));
 
-            // 开始分片下载
             const blob = await downloadUrlInParts(url, parts, totalSize,
-                (loaded, total) => {{
+                (loaded, total) => {
                     const percent = (loaded / total * 100).toFixed(1);
                     mainFill.style.width = percent + '%';
                     percentSpan.textContent = percent + '%';
                     const now = Date.now();
                     const elapsed = (now - lastTime) / 1000;
-                    if (elapsed > 0.3) {{
+                    if (elapsed > 0.3) {
                         const speed = (loaded - lastLoaded) / elapsed;
                         speedSpan.textContent = formatSpeed(speed);
                         const ratio = Math.min(speed / maxSpeed, 1);
-                        speedSpan.style.color = `rgb(255,${{Math.round(255*(1-ratio))}},${{Math.round(255*(1-ratio))}})`;
+                        speedSpan.style.color =
+                            `rgb(255,${Math.round(255*(1-ratio))},${Math.round(255*(1-ratio))})`;
                         speedSpan.style.fontWeight = speed > maxSpeed ? 'bold' : 'normal';
                         lastTime = now;
                         lastLoaded = loaded;
-                    }}
-                }},
-                (i, loaded, total) => {{
+                    }
+                },
+                (i, loaded, total) => {
                     if (subBars[i]) subBars[i].style.width = (loaded / total * 100) + '%';
-                }}
+                }
             );
             subBars.forEach(b => b.style.width = '100%');
             saveBlob(blob, name);
             modal.style.display = 'none';
-        }} catch (err) {{
+        } catch (err) {
+            console.error('[link] 下载失败:', err);
             showError('下载失败: ' + err.message);
-        }} finally {{
+        } finally {
             newStart.disabled = false;
             closeBtn.disabled = false;
-        }}
-    }});
+        }
+    });
 
     closeBtn.onclick = () => modal.style.display = 'none';
-    modal.style.display = 'block';
-}}
-
+}
 // 新增：URL 分片下载核心逻辑
 async function downloadUrlInParts(url, parts, totalSize, onProgress, onPartProgress) {{
     const results = new Array(parts.length);
@@ -1219,12 +1278,14 @@ def generate_index_html(root_dir):
                 parts_attr=f'data-parts=\'{parts_json}\''
             )
 
-        # 生成 .link 文件条目
+      
+        
+        # 生成 .link 文件条目（替换原来的这一段）
         link_files = [f for f in files if f.endswith('.link')]
         for link_file in sorted(link_files):
             link_path = os.path.join(root, link_file)
             link_data = parse_link_file(link_path)
-            url = link_data.get('url', '')
+            url = link_data.get('url', '').strip()
             if not url:
                 continue
             redirect = link_data.get('redirect', 'false').lower() == 'true'
@@ -1232,18 +1293,21 @@ def generate_index_html(root_dir):
                 threads = int(link_data.get('threads', 6))
             except ValueError:
                 threads = 6
-            link_name = link_file[:-5]  # 去掉 .link
-            extra_attrs = f'data-redirect="{str(redirect).lower()}" data-threads="{threads}"'
-            content += file_entry_template.format(
-                name=link_name,
-                url=url,
-                type='link',
-                size=0,
-                size_text='链接',
-                icon='🔗',
-                thumb='',
-                parts_attr=extra_attrs
-            )
+            link_name = link_file[:-5]
+            extra_attrs = (
+                f'data-redirect="{str(redirect).lower()}" '
+                f'data-threads="{threads}"'
+        )
+        content += file_entry_template.format(
+            name=html.escape(link_name, quote=True),
+            url=html.escape(url, quote=True),
+            type='link',
+            size=0,
+            size_text='链接',
+            icon='🔗',
+            thumb='',
+            parts_attr=extra_attrs
+        )
 
         # 生成普通文件条目
         for file_name in sorted(files):
