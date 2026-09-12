@@ -269,7 +269,7 @@ a:hover {{
 
 </div>
 
-<!-- 下载模态框（仅用于分片大文件） -->
+<!-- 下载模态框（仅用于分片大文件及链接下载） -->
 <div id="downloadModal" class="modal">
   <div class="modal-content">
     <h3 id="dlFileName"></h3>
@@ -484,6 +484,7 @@ async function startDownloadFlow(entryEl) {{
     document.getElementById('dlFileName').textContent = '📥 下载: ' + name;
     document.getElementById('dlFileSize').textContent = '总大小: ' + formatSize(size) + ' (' + parts.length + ' 个分片)';
     document.getElementById('dlMultiThread').checked = true;
+    document.getElementById('dlMultiThread').parentElement.style.display = ''; // 显示多线程复选框
     progressArea.innerHTML = '';
     startBtn.disabled = false;
     closeBtn.disabled = false;
@@ -572,6 +573,204 @@ async function startDownloadFlow(entryEl) {{
 
     closeBtn.onclick = () => modal.style.display = 'none';
     modal.style.display = 'block';
+}}
+
+// 新增：链接文件下载流程（多线程 URL 分片下载）
+async function startUrlDownloadFlow(name, url, threads) {{
+    const modal = document.getElementById('downloadModal');
+    const progressArea = document.getElementById('dlProgressArea');
+    const startBtn = document.getElementById('dlStartBtn');
+    const closeBtn = document.getElementById('dlCloseBtn');
+    const multiThreadCheckbox = document.getElementById('dlMultiThread');
+    const multiThreadLabel = multiThreadCheckbox.parentElement;
+
+    document.getElementById('dlFileName').textContent = '📥 下载: ' + name;
+    document.getElementById('dlFileSize').textContent = '正在获取文件大小...';
+    multiThreadLabel.style.display = 'none'; // 隐藏多线程复选框（线程数已由 .link 指定）
+    progressArea.innerHTML = '';
+    startBtn.disabled = false;
+    closeBtn.disabled = false;
+
+    const newStart = startBtn.cloneNode(true);
+    startBtn.parentNode.replaceChild(newStart, startBtn);
+
+    newStart.addEventListener('click', async () => {{
+        newStart.disabled = true;
+        closeBtn.disabled = true;
+        progressArea.innerHTML = '';
+        const mainBar = document.createElement('div');
+        mainBar.className = 'progress-bar';
+        mainBar.innerHTML = '<div class="progress-fill" id="mainFill" style="width:0%"></div>';
+        progressArea.appendChild(mainBar);
+        const mainFill = document.getElementById('mainFill');
+        const percentSpan = document.createElement('span');
+        percentSpan.id = 'dlPercent';
+        percentSpan.textContent = '0%';
+        percentSpan.style.marginLeft = '10px';
+        progressArea.appendChild(percentSpan);
+        const speedSpan = document.createElement('span');
+        speedSpan.id = 'dlSpeed';
+        speedSpan.textContent = '0 B/s';
+        speedSpan.style.marginLeft = '10px';
+        progressArea.appendChild(speedSpan);
+
+        let lastTime = Date.now();
+        let lastLoaded = 0;
+        const maxSpeed = 10 * 1024 * 1024;
+
+        try {{
+            // 获取文件总大小
+            let totalSize = 0;
+            try {{
+                const headResp = await fetch(url, {{ method: 'HEAD' }});
+                if (headResp.ok) {{
+                    totalSize = parseInt(headResp.headers.get('Content-Length'), 10);
+                }}
+            }} catch (e) {{}}
+            if (!totalSize) {{
+                const rangeResp = await fetch(url, {{ headers: {{ 'Range': 'bytes=0-0' }} }});
+                const contentRange = rangeResp.headers.get('Content-Range');
+                if (contentRange) {{
+                    totalSize = parseInt(contentRange.split('/')[1], 10);
+                }}
+            }}
+            if (!totalSize) {{
+                // 无法获取大小，回退单线程下载
+                const blob = await downloadFileAsBlob(url, (loaded, total) => {{
+                    const percent = total > 0 ? (loaded / total * 100).toFixed(1) : '?';
+                    mainFill.style.width = (total > 0 ? percent : 0) + '%';
+                    percentSpan.textContent = percent + '%';
+                }});
+                saveBlob(blob, name);
+                modal.style.display = 'none';
+                return;
+            }}
+
+            document.getElementById('dlFileSize').textContent = '总大小: ' + formatSize(totalSize);
+
+            // 根据 threads 划分分片
+            const partSize = Math.ceil(totalSize / threads);
+            const parts = [];
+            for (let i = 0; i < threads; i++) {{
+                const start = i * partSize;
+                const end = Math.min(start + partSize - 1, totalSize - 1);
+                if (start > end) break;
+                parts.push({{ start, end }});
+            }}
+
+            // 创建分片进度条
+            const subContainer = document.createElement('div');
+            parts.forEach((p, i) => {{
+                const bar = document.createElement('div');
+                bar.className = 'progress-bar sub-progress';
+                bar.innerHTML = `<div class="progress-fill sub-fill" id="subFill${{i}}" style="width:0%"></div>`;
+                subContainer.appendChild(bar);
+            }});
+            progressArea.appendChild(subContainer);
+            const subBars = parts.map((_, i) => document.getElementById(`subFill${{i}}`));
+
+            // 开始分片下载
+            const blob = await downloadUrlInParts(url, parts, totalSize,
+                (loaded, total) => {{
+                    const percent = (loaded / total * 100).toFixed(1);
+                    mainFill.style.width = percent + '%';
+                    percentSpan.textContent = percent + '%';
+                    const now = Date.now();
+                    const elapsed = (now - lastTime) / 1000;
+                    if (elapsed > 0.3) {{
+                        const speed = (loaded - lastLoaded) / elapsed;
+                        speedSpan.textContent = formatSpeed(speed);
+                        const ratio = Math.min(speed / maxSpeed, 1);
+                        speedSpan.style.color = `rgb(255,${{Math.round(255*(1-ratio))}},${{Math.round(255*(1-ratio))}})`;
+                        speedSpan.style.fontWeight = speed > maxSpeed ? 'bold' : 'normal';
+                        lastTime = now;
+                        lastLoaded = loaded;
+                    }}
+                }},
+                (i, loaded, total) => {{
+                    if (subBars[i]) subBars[i].style.width = (loaded / total * 100) + '%';
+                }}
+            );
+            subBars.forEach(b => b.style.width = '100%');
+            saveBlob(blob, name);
+            modal.style.display = 'none';
+        }} catch (err) {{
+            showError('下载失败: ' + err.message);
+        }} finally {{
+            newStart.disabled = false;
+            closeBtn.disabled = false;
+        }}
+    }});
+
+    closeBtn.onclick = () => modal.style.display = 'none';
+    modal.style.display = 'block';
+}}
+
+// 新增：URL 分片下载核心逻辑
+async function downloadUrlInParts(url, parts, totalSize, onProgress, onPartProgress) {{
+    const results = new Array(parts.length);
+    let active = 0;
+    let index = 0;
+    let downloaded = 0;
+    const partLoaded = new Array(parts.length).fill(0);
+    const partTotals = parts.map(p => p.end - p.start + 1);
+
+    const dlPart = async (i) => {{
+        const {{ start, end }} = parts[i];
+        const resp = await fetch(url, {{ headers: {{ 'Range': `bytes=${{start}}-${{end}}` }} }});
+        if (!resp.ok && resp.status !== 206) throw new Error(`HTTP ${{resp.status}}`);
+        const reader = resp.body.getReader();
+        const chunks = [];
+        let received = 0;
+        while (true) {{
+            const {{ done, value }} = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            received += value.length;
+            const delta = received - partLoaded[i];
+            if (delta > 0) {{
+                downloaded += delta;
+                partLoaded[i] = received;
+                if (onProgress) onProgress(downloaded, totalSize);
+            }}
+            if (onPartProgress) onPartProgress(i, received, partTotals[i]);
+        }}
+        const buf = new Uint8Array(received);
+        let pos = 0;
+        for (const chunk of chunks) {{
+            buf.set(chunk, pos);
+            pos += chunk.length;
+        }}
+        results[i] = buf.buffer;
+        const remaining = partTotals[i] - partLoaded[i];
+        if (remaining > 0) {{
+            downloaded += remaining;
+            partLoaded[i] = partTotals[i];
+            if (onProgress) onProgress(downloaded, totalSize);
+        }}
+        if (onPartProgress) onPartProgress(i, partTotals[i], partTotals[i]);
+    }};
+
+    return new Promise((resolve, reject) => {{
+        const next = () => {{
+            while (active < parts.length && index < parts.length) {{
+                const i = index++;
+                active++;
+                dlPart(i).then(() => {{ active--; next(); }}).catch(reject);
+            }}
+            if (active === 0 && index === parts.length) {{
+                const totalLength = results.reduce((sum, buf) => sum + buf.byteLength, 0);
+                const merged = new Uint8Array(totalLength);
+                let offset = 0;
+                for (const buf of results) {{
+                    merged.set(new Uint8Array(buf), offset);
+                    offset += buf.byteLength;
+                }}
+                resolve(new Blob([merged]));
+            }}
+        }};
+        next();
+    }});
 }}
 
 // 图片预览
@@ -669,6 +868,18 @@ function handleFileClick(entryEl) {{
     const name = entryEl.dataset.name;
     const url = entryEl.dataset.url;
     const parts = entryEl.dataset.parts ? JSON.parse(entryEl.dataset.parts) : null;
+
+    // 链接文件处理
+    if (type === 'link') {{
+        const redirect = entryEl.dataset.redirect === 'true';
+        const threads = parseInt(entryEl.dataset.threads) || 6;
+        if (redirect) {{
+            window.open(url, '_blank');
+        }} else {{
+            startUrlDownloadFlow(name, url, threads);
+        }}
+        return;
+    }}
 
     // 分片文件：必须弹窗下载
     if (parts && parts.length > 0) {{
@@ -902,6 +1113,23 @@ def generate_thumbnail(file_path, thumb_name="thumb.jpg", size=(200, 200)):
         return None
 
 
+def parse_link_file(file_path):
+    """解析 .link 文件，返回字典"""
+    data = {}
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    data[key.strip()] = value.strip()
+    except Exception as e:
+        print(f"⚠️ 解析 .link 文件失败 ({file_path}): {e}")
+    return data
+
+
 # =========================
 # 复制文件
 # =========================
@@ -941,7 +1169,7 @@ def generate_index_html(root_dir):
         part_pattern = re.compile(r'^(.+)\.(\d{3,})$')
         potential_parts = {}
         for fn in files:
-            if fn in ['index.html', 'info.json', 'info.md']:
+            if fn in ['index.html', 'info.json', 'info.md'] or fn.endswith('.link'):
                 continue
             m = part_pattern.match(fn)
             if m:
@@ -991,12 +1219,40 @@ def generate_index_html(root_dir):
                 parts_attr=f'data-parts=\'{parts_json}\''
             )
 
+        # 生成 .link 文件条目
+        link_files = [f for f in files if f.endswith('.link')]
+        for link_file in sorted(link_files):
+            link_path = os.path.join(root, link_file)
+            link_data = parse_link_file(link_path)
+            url = link_data.get('url', '')
+            if not url:
+                continue
+            redirect = link_data.get('redirect', 'false').lower() == 'true'
+            try:
+                threads = int(link_data.get('threads', 6))
+            except ValueError:
+                threads = 6
+            link_name = link_file[:-5]  # 去掉 .link
+            extra_attrs = f'data-redirect="{str(redirect).lower()}" data-threads="{threads}"'
+            content += file_entry_template.format(
+                name=link_name,
+                url=url,
+                type='link',
+                size=0,
+                size_text='链接',
+                icon='🔗',
+                thumb='',
+                parts_attr=extra_attrs
+            )
+
         # 生成普通文件条目
         for file_name in sorted(files):
             if file_name in ['index.html', 'info.json', 'info.md']:
                 continue
             if file_name in all_part_files:
                 continue
+            if file_name.endswith('.link'):
+                continue  # 已处理
             file_path = os.path.join(root, file_name)
             file_size = os.path.getsize(file_path)
             icon = get_file_icon(file_name)
